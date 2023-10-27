@@ -1,0 +1,9 @@
+# Sondre sin Mac roter
+.DS_Store
+
+# Latex-filer
+*.log
+*.aux
+*.fls
+*.fdb_latexmk
+*.synctex.gz
