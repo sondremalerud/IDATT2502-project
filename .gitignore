@@ -1,7 +1,7 @@
-# Sondre sin Mac roter
+# Stop Sondre's Mac from making a mess
 .DS_Store
 
-# Latex-filer
+# Latex-files
 *.log
 *.aux
 *.fls
