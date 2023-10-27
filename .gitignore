@@ -1,7 +1,9 @@
 # Stop Sondre's Mac from making a mess
 .DS_Store
 
-# Latex-files
+# Latex files
+*.bbl
+*.blg
 *.log
 *.aux
 *.fls
