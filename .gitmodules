@@ -1,3 +1,7 @@
 [submodule "mario-bros-env"]
 	path = mario-bros-env
 	url = https://github.com/jakobkg/mario-bros-env.git
+[submodule "nes-py"]
+	path = nes-py
+	url = https://github.com/ItaiBear/nes-py.git
+	branch = gymnasium
