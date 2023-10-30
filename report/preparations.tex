@@ -1,0 +1,7 @@
+\section{Preparations}
+
+To get started with our project, some ground work was needed to be able to run and interact with Super Mario Bros. programatically.
+
+Early scouting led us to nes-py, an OpenAI Gym compatible NES emulator, and gym-super-mario-bros \citep{gym-smb}, a wrapper for nes-py with specific methods to interact with Super Mario Bros. However, both these packages were built for the now deprecated OpenAI Gym and are not readily compatible with Gymnasium. For nes-py someone else had already done the work by forking and updating the package for Gymnasium, but we could not find an updated fork of the gym-super-mario-bros wrapper and ended up forking and updating it ourselves. The existing wrapper contained functionality for two different games and included game files that we would prefer not to publish, so we narrowed down the scope of the wrapper to only cover out desired game and require users to provide game files themselves.
+
+Both the pre-exising fork of nes-py and our fork of gym-super-mario-bros are available as submodules in our project repository.
