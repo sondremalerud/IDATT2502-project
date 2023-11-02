@@ -45,6 +45,6 @@ if __name__ == '__main__':
     plt.imshow(img)
     
     fig.add_subplot(1, 2, 2)
-    plt.imshow(rgb2grayscale(img), cmap='Greys_r')
+    plt.imshow(vxycc709(img), cmap='Greys_r')
     
     plt.show()
