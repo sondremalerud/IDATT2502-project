@@ -4,6 +4,9 @@
 #Jetbrains
 .idea
 
+# Pycache
+**/__pycache__
+
 # DO NOT ADD GAME ROMS TO THE REPO!!
 *.nes
 

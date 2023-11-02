@@ -25,6 +25,7 @@ def vxycc601(colored_image):
     weighted_green = 0.114 * colored_image[:, :, 2]
     desaturated_image = weighted_red + weighted_green + weighted_blue
     return desaturated_image
+
 def average(colored_image):
     red = colored_image[:, :, 0]
     blue = colored_image[:, :, 1]
