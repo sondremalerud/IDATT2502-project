@@ -4,6 +4,8 @@ from nes_py.wrappers import JoypadSpace
 import mario_bros_env
 from mario_bros_env.actions import RIGHT_ONLY
 from filters import grayscale, downscale
+import signal
+import sys
 
 class Model:
     def __init__(self, env):
@@ -39,13 +41,14 @@ class Model:
 
     def train(self, episodes=100, steps=1000):
         rewards = []
-        for episode in range(episodes):
+        episode = 0
+        while True:
             self.exp_rate = self.get_exploration_rate()
             observation, info = self.env.reset()
             state = self.processFrame(observation)
-            done = False
+            #done = False
             reward_current_ep = 0
-            for step in range(steps):
+            for _ in range(steps):
                 self.env.render()
                 action = self.action(state)
                 new_state, reward, done, truncated, info = self.env.step(action)
@@ -53,38 +56,61 @@ class Model:
                 self.Q_Values[new_state][action] += self.updated_q_value(state, action, reward, new_state)
                 state = new_state
                 reward_current_ep += reward
-                if done:
+
+                if done or truncated:
                     break
             rewards.append(reward_current_ep)
             print(f"Score for episode {episode+1}: {rewards[episode]}")
             print(f"Exploration probability: {self.exp_rate}")
+            episode +=1
 
-
-        print('Finished')
+    def save_q_values(self):
         np.save("q_values.npy", self.Q_Values)
-        return rewards
-
+    
     def run(self):
         self.Q_Values = np.load("q_values.npy")
 
         done = False
+        truncated = False
         state, info = self.env.reset()
         state = self.processFrame(state)
-        while not done:
-            print("run")
+        while not (done or truncated):
             self.env.render()
             action = self.action(state)
             new_state, reward, done, truncated, info = self.env.step(action)
             new_state = self.processFrame(new_state)
             state = new_state
-    
+        
+        self.env.close()
 
-env = mario_bros_env.make(
-    'SuperMarioBros-v0',
-    render_mode=None
-)
-env = JoypadSpace(env, RIGHT_ONLY)
 
-model = Model(env)
-model.train()
-model.run()
+def custom_interrupt_handler(signum, frame):
+    # This function will be called when Ctrl+C is pressed
+    print("\nCustom interrupt handler activated.")
+    model.save_q_values()
+    print("Q_values saved")
+    exit()
+
+
+training = True
+
+if training:
+    env = mario_bros_env.make(
+        'SuperMarioBros-v0',
+        render_mode=None
+    )
+    env = JoypadSpace(env, RIGHT_ONLY)
+    model = Model(env)
+    # Register the custom interrupt handler for Ctrl+C (SIGINT)
+    signal.signal(signal.SIGINT, custom_interrupt_handler)
+    model.train()
+    model.run()
+
+else:
+    env = mario_bros_env.make(
+        'SuperMarioBros-v0',
+        render_mode="human"
+    )
+    env = JoypadSpace(env, RIGHT_ONLY)
+    model = Model(env)
+    model.run()
