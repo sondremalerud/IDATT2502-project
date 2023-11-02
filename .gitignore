@@ -1,8 +1,11 @@
 # Stop Sondre's Mac from making a mess
 .DS_Store
 
-# Python cache
-**/__pycache__/
+#Jetbrains
+.idea
+
+# Pycache
+**/__pycache__
 
 # DO NOT ADD GAME ROMS TO THE REPO!!
 *.nes
