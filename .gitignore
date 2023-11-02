@@ -2,7 +2,7 @@
 .DS_Store
 
 # Python cache
-/src/__pycache__/
+**/__pycache__/
 
 # DO NOT ADD GAME ROMS TO THE REPO!!
 *.nes
