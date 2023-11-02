@@ -1,0 +1,19 @@
+\section{Image processing}
+
+Our machine learning model takes images of the game as its input, and the NES outputs colour images at a resolution of 240 pixels by 256 pixels. If we were to use this entire image as the input for our model, the state dimension of our Q-table would have a size of $240 \cdot 256 \cdot 3 = 184320$ which is rather large. We can reduce all these three numbers (horizontal resolution, vertical resolution and colours per pixel) by downsampling the images and by converting them from colour to grayscale.
+
+\subsection{Grayscale conversion}
+
+The number of methods to convert an image from colour to grayscale is practically infinite, and we theorized early on that our choice grayscale conversion method would impact model performance. We wanted to ensure that our conversion method resulted in an image where Mario, who is primarily red, would stand out from the primarily sky blue background. We decided to implement a small selection of conversions with different characteristics to benchmark them and see if they affect model performance.
+
+\subsubsection*{Implemented grayscale conversion methods}
+
+\begin{itemize}
+    \item vxYCC$_{601}$ and vxYCC$_{709}$, two weighted sums of the red, green and blue channels that aim to be perceptually neutral. Weights are provided by a report from the International Telecommunications Union on Television Colorimetry (https://www.itu.int/dms\_pub/itu-r/opb/rep/R-REP-BT.2380-2-2018-PDF-E.pdf)
+    \item RGB pixel average, a naive approach that simply averages the red, green and blue channels of the image
+    \item RGB channel isolation, naive methods that simply return the red, green or blue colour channel of the image unaltered
+\end{itemize}
+
+\subsection{Downsampling}
+
+As our image data is already represented by a NumPy array, we were able to use pre-existing NumPy methods to downsample the image with a configurable $K \times K$ kernel size, taking the average over a group of pixels to calculate the colour of the resulting pixel in the output image.
