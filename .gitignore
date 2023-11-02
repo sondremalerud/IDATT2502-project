@@ -1,6 +1,9 @@
 # Stop Sondre's Mac from making a mess
 .DS_Store
 
+#Jetbrains
+.idea
+
 # Python cache
 /src/__pycache__/
 
