@@ -1,8 +1,11 @@
 # Stop Sondre's Mac from making a mess
 .DS_Store
 
+# Python cache
+/src/__pycache__/
+
 # DO NOT ADD GAME ROMS TO THE REPO!!
-.nes
+*.nes
 
 # Latex files
 *.bbl
@@ -13,3 +16,4 @@
 *.fdb_latexmk
 *.synctex.gz
 *.pdf
+
