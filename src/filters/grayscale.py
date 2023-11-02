@@ -19,6 +19,22 @@ def vxycc709(img: list[list[RGBPixel]]) -> list[GrayscalePixel]:
 
     return red_pixels + green_pixels + blue_pixels
 
+def vxycc601(colored_image):
+    weighted_red = 0.299 * colored_image[:, :, 0]
+    weighted_blue = 0.587 * colored_image[:, :, 1]
+    weighted_green = 0.114 * colored_image[:, :, 2]
+    desaturated_image = weighted_red + weighted_green + weighted_blue
+    return desaturated_image
+def average(colored_image):
+    red = colored_image[:, :, 0]
+    blue = colored_image[:, :, 1]
+    green = colored_image[:, :, 2]
+    desaturated_image = red + green + blue
+    desaturated_image = desaturated_image/3
+    return desaturated_image
+
+
+
 if __name__ == '__main__':
     from matplotlib import pyplot as plt
     

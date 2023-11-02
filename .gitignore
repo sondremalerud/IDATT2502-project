@@ -1,6 +1,9 @@
 # Stop Sondre's Mac from making a mess
 .DS_Store
 
+#Jetbrains
+.idea
+
 # DO NOT ADD GAME ROMS TO THE REPO!!
 *.nes
 
