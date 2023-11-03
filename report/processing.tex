@@ -1,6 +1,6 @@
 \section{Image processing}
 
-Our machine learning model takes images of the game as its input, and the NES outputs colour images at a resolution of 240 pixels by 256 pixels. If we were to use this entire image as the input for our model, the state dimension of our Q-table would have a size of $240 \cdot 256 \cdot 3 = 184320$ which is rather large. We can reduce all these three numbers (horizontal resolution, vertical resolution and colours per pixel) by downsampling the images and by converting them from colour to grayscale.
+Our machine learning model takes images of the game as its input, and the NES outputs colour images at a resolution of 240 pixels by 256 pixels. If we were to use this entire image as the input for our model, the state dimension of our Q-table would have a size of $240 \cdot 256 \cdot 3 \cdot 256 = 47,185,920$ which is rather large. We can reduce all these numbers (horizontal resolution, vertical resolution, channels per pixel and sample depth) by downscaling and downsampling the images, and by converting them from colour to grayscale.
 
 \subsection{Grayscale conversion}
 
@@ -14,14 +14,18 @@ The number of methods to convert an image from colour to grayscale is practicall
     \item RGB channel isolation, naive methods that simply return the red, green or blue colour channel of the image unaltered
 \end{itemize}
 
-TODO: BILDE SOM VISER SAMME BILDE BEHANDLET MED ALLE DE FORSKJELLIGE METODENE
+TODO: BILDE SOM VISER SAMME FRAME BEHANDLET MED ALLE DE FORSKJELLIGE METODENE
+
+\subsection{Downscaling}
+
+As our image data is already represented by a NumPy array, we were able to use pre-existing NumPy methods to downscale the image with a configurable $K \times K$ kernel size, taking the average over a group of pixels to calculate the colour of the resulting pixel in the output image.
 
 \subsection{Downsampling}
 
-As our image data is already represented by a NumPy array, we were able to use pre-existing NumPy methods to downsample the image with a configurable $K \times K$ kernel size, taking the average over a group of pixels to calculate the colour of the resulting pixel in the output image.
+In full 8-bit grayscale, our images still hold a lot of data that might be redundant. We created a simple downsampling filter to further reduce the complexity of our model's input, utilizing the power of integer division and NumPy's vectorization.
 
 \subsection{Results}
 
-By employing both downsampling and grayscale conversions, we were able to significantly reduce the size of the state dimension of the Q-table. By converting the image to grayscale and downsampling with a sample factor of 8, the state size was reduced to $30 \cdot 32 \cdot 1 = 960$, a reduction to 0.5\% of the original.
+By employing both downsampling and grayscale conversions, we were able to significantly reduce the size of the state dimension of the Q-table. By converting the image to grayscale, downscaling with a scale factor of 8 and downsampling with a sample depth of 4 the state size was reduced to $30 \cdot 32 \cdot 4 = 3840$, a reduction to $0.0081\%$ of the original observation space.
 
 NOE OM YTELSE HER TAKK :)
