@@ -16,7 +16,7 @@ def vxycc709(img: list[list[RGBPixel]]) -> list[GrayscalePixel]:
     green_pixels = GREEN_WEIGHT * img[:, :, 1]
     blue_pixels = BLUE_WEIGHT * img[:, :, 2]
 
-    return (red_pixels + green_pixels + blue_pixels).astype(np.int8)
+    return (red_pixels + green_pixels + blue_pixels).astype(np.uint8)
 
 
 def vxycc601(colored_image):
@@ -27,7 +27,7 @@ def vxycc601(colored_image):
     weighted_blue = 0.587 * colored_image[:, :, 1]
     weighted_green = 0.114 * colored_image[:, :, 2]
     desaturated_image = weighted_red + weighted_green + weighted_blue
-    return desaturated_image.astype(np.int8)
+    return desaturated_image.astype(np.uint8)
 
 
 def average(colored_image):
@@ -37,7 +37,7 @@ def average(colored_image):
     green = colored_image[:, :, 2]
     desaturated_image = red + green + blue
     desaturated_image = desaturated_image/3
-    return desaturated_image.astype(np.int8)
+    return desaturated_image.astype(np.uint8)
 
 
 def _channel(img: list[list[RGBPixel]], channel: Literal[0, 1, 2]) -> list[GrayscalePixel]:

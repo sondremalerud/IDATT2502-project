@@ -11,4 +11,4 @@ def divide(img, factor: int):
     MK = M // factor
     NL = N // factor
 
-    return img[:MK*factor, :NL*factor].reshape(MK, factor, NL, factor).mean(axis=(1, 3)).astype(np.int8)
+    return img[:MK*factor, :NL*factor].reshape(MK, factor, NL, factor).mean(axis=(1, 3)).astype(np.uint8)
