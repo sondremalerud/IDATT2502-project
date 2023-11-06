@@ -11,12 +11,17 @@ from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
 from torchrl.data.replay_buffers.storages import LazyTensorStorage
 from torchrl.envs import (Compose, DoubleToFloat, ObservationNorm, StepCounter,
                           TransformedEnv)
-from torchrl.envs.libs.gym import GymEnv
+from torchrl.envs.libs.gym import GymWrapper
 from torchrl.envs.utils import check_env_specs, set_exploration_mode
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
 from tqdm import tqdm
+
+import mario_bros_env
+import wrappers.filtered
+from mario_bros_env.actions import RIGHT_ONLY
+from nes_py.wrappers import JoypadSpace
 
 ##########################
 # Define Hyperparameters #
@@ -50,7 +55,9 @@ entropy_eps = 1e-4
 #########################
 # Define an environment #
 #########################
-base_env = GymEnv("InvertedDoublePendulum-v4", device=device, frame_skip=frame_skip)
+base_env = wrappers.filtered.FilteredMarioEnv(render_mode="human")
+base_env = JoypadSpace(base_env, RIGHT_ONLY)
+base_env = GymWrapper(base_env, device=device)
 
 
 ##################
@@ -60,10 +67,10 @@ env = TransformedEnv(
     base_env,
     Compose(
         # normalize observations
-        ObservationNorm(in_keys=["observation"]),
-        DoubleToFloat(in_keys=["observation"]),
+        ObservationNorm(in_keys=["pixels"], standard_normal=True),
+        DoubleToFloat(in_keys=["pixels"]),
         StepCounter(),
-    ),
+    ),   
 )
 
 env.transform[0].init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
