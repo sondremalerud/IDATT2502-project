@@ -6,6 +6,7 @@ from mario_bros_env.actions import RIGHT_ONLY
 from filters import grayscale, downscale
 import signal
 import sys
+import torch
 
 class Model:
     def __init__(self, env):
