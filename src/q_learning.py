@@ -12,15 +12,18 @@ import torch.nn.functional as F
 import torch.optim as optim
 from collections import namedtuple, deque
 import random
+import matplotlib.pyplot as plt
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 
 # A named tuple representing a single transition in our environment. 
 # It maps (state, action) pairs to their (next_state, reward) result
 #https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
-
+Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward', 'done'))
 #https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-class ReplayMemory(object):
+class ReplayBuffer(object):
 
     def __init__(self, capacity):
         self.memory = deque([], maxlen=capacity)
@@ -35,98 +38,231 @@ class ReplayMemory(object):
     def __len__(self):
         return len(self.memory)
 
-class Model:
-    def __init__(self, env):
+class Model(nn.Module):
+    def __init__(self,observation_num, num_action ):
         super(Model, self).__init__()
+        self.observation_num = observation_num
+        self.num_action = num_action
+
+        self.layer1 = nn.Linear(self.observation_num, 128)
+        self.layer2 = nn.Linear(128, 128)
+        self.layer3 = nn.Linear(128, self.num_action)
         # 4 stacked frames as input (which will be one state)
-        self.conv1 = nn.Conv2d(in_channels=4, out_channels=32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
+        #self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, stride=1) # 1 frame as state
+        #self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1,padding=1)
+        #self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=2, stride=1)
 
-        self.layer1 = nn.Linear(64*5*5,512)
-        self.layer2 = nn.Linear(512, self.env.action_space.n)
+        #self.layer1 = nn.Linear(32*30*28,512)
+        #self.layer2 = nn.Linear(512, num_action)
 
-        self.optimizer = torch.optim.Adam()
-
-        self.image_dimentions = (30,32)
-        self.num_colors = 4
-        
-        self.env = env
-        self.actions = actions.RIGHT_ONLY
-
-        self.lr = 0.2
-        self.exp_rate = 1.0
-        self.decay_rate = 0.995
-        self.min_exp_rate = 0.1
-        self.discount = 0.99
-        self.observation_space = self.env.observation_space.shape
-        
+  #      self.image_dimentions = (30,32)
+   #     self.num_colors = 4
+ 
         
 
-    def forward(self):
-        x = F.relu(self.conv1(x))
+    def forward(self,x):
+        x = F.relu(self.layer1(x))
+        x = F.relu(self.layer2(x))
+        x = self.layer3(x)
+        return x
+        """x = F.relu(self.conv1(x))
+        print(x.size())
+
         x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
+        print(x.size())
+
+        #x = F.relu(self.conv3(x))
+
+        x = torch.flatten(x, start_dim=0)
+
+        print(x.size())
+
+
+        x = F.relu(self.layer1(x))
+        x = F.relu(self.layer2(x))
+        x = self.layer2(x)
+        return x
+    #    x = F.relu(self.conv1(x))
+     #   x = F.relu(self.conv2(x))
+      #  x = F.relu(self.conv3(x))
         x = x.reshape(x.size(0), -1)
         x = torch.relu(self.layer1(x))
-        return self.layer2(x)
+        #return self.layer2(x)"""
+
+class Agent:
+    def __init__(self,
+                 env,
+                 observation_space_n,
+                 action_space_n,
+                 memory_capacity=100000,
+                 discount=0.99,
+                 learning_rate=0.001,
+                 exp_rate=0.9,
+                 min_exp_rate=0.1,
+                 exp_decay=0.9990, #FIXME prøv 0.99991 når du trener hjemme
+                 ):
+
+        self.device = device
+        self.env = env
+
+        self.action_space_n = action_space_n
+        self.observation_space_n = observation_space_n
+
+        # parameters
+        self.memory_capacity = memory_capacity
+        self.discount = discount
+        self.learning_rate = learning_rate
+        self.exp_rate = exp_rate
+        self.min_exp_rate = min_exp_rate
+        self.exp_decay = exp_decay
+
+        # networks
+        self.model = Model(self.observation_space_n, self.action_space_n).to(device)
+        self.target_model = Model(self.observation_space_n, self.action_space_n).to(device)
+
+        # agent memory
+        self.replay_memory = ReplayBuffer(self.memory_capacity)
+
+        # rewards
+        self.rewards = []
+
+        # optimizer
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+
+        # self.target_model.eval()
+        self.target_model.load_state_dict(self.model.state_dict())
+
+    def update_target_model(self):
+       
+        self.target_model.load_state_dict(self.model.state_dict())
+
+    def get_exploration_rate(self):
+        """returns exploration rate"""
+        return max(self.exp_rate, self.min_exp_rate)
+
+    def update_exploration_rate(self):
+        """Updates exploration rate"""
+
+        self.exp_rate = self.exp_rate * self.exp_decay
+        return self.exp_rate
+
+    def save_model(self):
+        """Saves model to the .pth file format"""
+
+        torch.save(self.model.state_dict(), "dqn.pth")
+        print("saved model to 'dqn.pth'")
+
+    def load_model(self):
+        """Loads network from .pth file """
+
+        self.model.load_state_dict(torch.load("dqn.pth"))
+        self.model.eval()
 
     def action(self, state):
-        exploration_rate_threshold = np.random.random() # tilfeldig float fra 0-1
-        exploration_rate = self.exp_rate
-        if (exploration_rate_threshold <= exploration_rate):
-            action = self.env.action_space.sample()
+        """Selects an action using the epsilon-greedy strategy"""
+
+        exploration_rate_threshold = np.random.random()  # random float between 0-1
+        exploration_rate = self.get_exploration_rate()
+        
+
+        if exploration_rate_threshold <= exploration_rate:  # do random action
+            action = random.randrange(0, self.action_space_n)
+            action_t = torch.tensor([[action]], device=device, dtype=torch.long)
         else:
-            action = np.argmax('''#todo''')
-        return action
-    
-    def get_exploration_rate(self):
-        return max(self.exp_rate * self.decay_rate, self.min_exp_rate)
-    
-    def updated_q_value(self, state, action, reward, new_state):
-        return (self.lr * (reward + self.discount * np.max(self.Q_Values[new_state]) - self.Q_Values[state][action]))
-    
+            # action_t = self.model(state).max(dim=1)[1].reshape(1, 1)
+            action_t = self.model(state).argmax().reshape(1, 1)
+        return action_t
+
     def processFrame(self, state):
         gray_state = grayscale.vxycc709(state)
         rescaled_state = downscale.divide(gray_state, 8)
-        downsampled_state = downsample.downsample(rescaled_state, self.num_colors)
-        return downsampled_state
+        downsampled_state = downsample.downsample(rescaled_state, 4)
+        #return downsampled_state
+        return torch.cat(tuple(torch.tensor(downsampled_state)))
+    
+    def optimize(self, batch_size):
+        if len(self.replay_memory) < batch_size:
+            return
 
-    def train(self, episodes=100, steps=1000):
-        rewards = []
-        episode = 0
-        while True:
-            self.exp_rate = self.get_exploration_rate()
-            observation, info = self.env.reset()
-            state = self.processFrame(observation)
+        transitions = self.replay_memory.sample(batch_size)
+        batch = Transition(*zip(*transitions))
 
-            #done = False
-            reward_current_ep = 0
-            for _ in range(steps):
-                self.env.render()
-                action = self.action(state)
-                new_state, reward, done, truncated, info = self.env.step(action)
-                new_state = self.processFrame(new_state)
+        state_b = torch.cat(batch.state)
+        next_state_b = torch.cat(batch.next_state)
+        action_b = torch.cat(batch.action)
+        done_t = torch.cat(batch.done).unsqueeze(1)
 
+        target_q = self.target_model(next_state_b)
+        max_target_q = target_q.argmax()
 
-                #self.Q_Values[new_state][action] += self.updated_q_value(state, action, reward, new_state)
-                #TODO :)
-               
-                state = new_state
-                reward_current_ep += reward
-                if done or truncated:
+        r = torch.cat(batch.reward)  # dim [n]
+        r = r.unsqueeze(1)  # dim [x,1]
+
+        # Q(s, a) = r + γ * max(Q(s', a')) ||
+        # Q(s, a) = r                      || if state is done
+        Q_sa = r + self.discount * max_target_q * (1 - done_t)  # if done = 1 => Q_result = r
+        Q_sa = Q_sa.reshape(-1, 1)
+
+        predicted = torch.gather(input=self.model(state_b), dim=1, index=action_b)
+
+        loss = F.mse_loss(predicted, Q_sa)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+    def plot_rewards(self):
+        # Plotting the rewards
+        plt.plot(self.rewards, marker='o')
+        plt.title('Rewards per Episode')
+        plt.xlabel('Episode')
+        plt.ylabel('Reward')
+        plt.show()
+
+    def train(self, episodes=100, steps=4000):
+        self.rewards = []
+        for episode in range(num_episodes):
+            ep_reward = 0
+            state, info = env.reset()
+            state = agent.processFrame(state)
+            state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+            
+            for s in range(steps):
+                action = agent.action(state)
+                observation, reward, terminated, truncated, info = env.step(action.item())
+                observation = agent.processFrame(observation)
+                ep_reward += reward
+                
+                reward = torch.tensor([reward], device=device)
+
+                done = terminated or truncated
+                done_t = torch.tensor(done, dtype=torch.float32, device=device).unsqueeze(0)
+
+                next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
+
+                # store
+                agent.replay_memory.push(state, action, next_state, reward, done_t)
+
+                state = next_state
+
+                # optimize
+                agent.optimize(batch_size)
+
+                if s % update_frequency == 0:
+                    agent.update_target_model()
+
+                if done:
                     break
-            rewards.append(reward_current_ep)
-            print(f"Score for episode {episode+1}: {rewards[episode]}")
-            print(f"Exploration probability: {self.exp_rate}")
-            episode +=1
+            self.rewards.append(ep_reward)
 
-    def save_q_values(self):
-        torch.save(self.state_dict(),"dqn.pth")
+
+            print("episode: " + str(episode) + " reward: " + str(ep_reward))
+            if episode % 100 == 0:
+                print(f'exp_rate: {agent.get_exploration_rate()}')
+            self.update_exploration_rate()
+
+  
     
     def run(self):
-    
-
         done = False
         truncated = False
         state, info = self.env.reset()
@@ -141,17 +277,20 @@ class Model:
         self.env.close()
 
 
-def custom_interrupt_handler(signum, frame):
-    # This function will be called when Ctrl+C is pressed
-    print("\nCustom interrupt handler activated.")
-    model.save_q_values()
-    print("Q_values saved")
-    exit()
+    def custom_interrupt_handler(self,signum, frame):
+        # This function will be called when Ctrl+C is pressed
+        print("\nCustom interrupt handler activated.")
+        self.save_model()
+        print("Q_values saved")
+        self.plot_rewards()
+
+        exit()
 
 
+num_episodes = 2000
+batch_size = 128
+update_frequency = 10
 training = True
-
-batch_size = 100
 
 
 if training:
@@ -161,14 +300,28 @@ if training:
     )
     env = JoypadSpace(env, RIGHT_ONLY)
 
-    model = Model(env)
-    target_model = Model(env)
-    target_model.load_state_dict(model.state_dict)
+    env_action_num = env.action_space.n
+    state, info = env.reset()
+    n_observations = 32*30
+   
+
+    agent = Agent(env, n_observations, env_action_num)
+    #state= agent.processFrame(state)
+    #print(state.shape)
+    
+    state, _ = env.reset()
+    state = torch.tensor(state.copy(), dtype=torch.float32, device=device).unsqueeze(0)
+   # model = Model(env)
+    #target_model = Model(env)
+    #target_model.load_state_dict(model.state_dict)
 
     # Register the custom interrupt handler for Ctrl+C (SIGINT)
-    signal.signal(signal.SIGINT, custom_interrupt_handler)
-    model.train()
-    model.run()
+    signal.signal(signal.SIGINT, agent.custom_interrupt_handler)
+    agent.train(1000)
+    agent.save_model()
+    agent.plot_rewards()
+
+    #model.run()
 
 else:
     env = mario_bros_env.make(
@@ -176,6 +329,24 @@ else:
         render_mode="human"
     )
     env = JoypadSpace(env, RIGHT_ONLY)
-    model = Model(env)
-    model.load_state_dict(torch.load("dqn.pth"))
-    model.run()
+
+    env_action_num = env.action_space.n
+    state, info = env.reset()
+    n_observations = 30*32
+
+    agent = Agent(env, n_observations, env_action_num, 
+    exp_rate=0.1,
+    )
+    agent.load_model()
+
+    state, _ = env.reset()
+    state = torch.tensor(state.copy(), dtype=torch.float32, device=device).unsqueeze(0)
+   # model = Model(env)
+    #target_model = Model(env)
+    #target_model.load_state_dict(model.state_dict)
+
+    # Register the custom interrupt handler for Ctrl+C (SIGINT)
+    signal.signal(signal.SIGINT, agent.custom_interrupt_handler)
+    agent.train(1000)
+    agent.plot_rewards()
+   # model.run()

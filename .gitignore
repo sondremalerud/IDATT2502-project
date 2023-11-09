@@ -21,3 +21,5 @@
 *.pdf
 
 **/q_values.npy
+src/cartpole.py
+dqn.pth
