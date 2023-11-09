@@ -94,12 +94,12 @@ class Agent:
                  env,
                  observation_space_n,
                  action_space_n,
-                 memory_capacity=100000,
+                 memory_capacity=100_000,
                  discount=0.99,
                  learning_rate=0.001,
                  exp_rate=0.9,
                  min_exp_rate=0.1,
-                 exp_decay=0.9990, #FIXME prøv 0.99991 når du trener hjemme
+                 exp_decay=0.99991, #FIXME prøv 0.99991 når du trener hjemme
                  ):
 
         self.device = device
@@ -317,7 +317,7 @@ if training:
 
     # Register the custom interrupt handler for Ctrl+C (SIGINT)
     signal.signal(signal.SIGINT, agent.custom_interrupt_handler)
-    agent.train(1000)
+    agent.train(episodes=50_000)
     agent.save_model()
     agent.plot_rewards()
 
@@ -335,7 +335,7 @@ else:
     n_observations = 30*32
 
     agent = Agent(env, n_observations, env_action_num, 
-    exp_rate=0.1,
+    exp_rate=0.2,
     )
     agent.load_model()
 
@@ -347,6 +347,6 @@ else:
 
     # Register the custom interrupt handler for Ctrl+C (SIGINT)
     signal.signal(signal.SIGINT, agent.custom_interrupt_handler)
-    agent.train(1000)
+    agent.train(episodes=1000)
     agent.plot_rewards()
    # model.run()
