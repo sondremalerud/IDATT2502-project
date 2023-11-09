@@ -1,8 +1,7 @@
 import numpy as np
 from typing import Literal
 
-RGBPixel = tuple[int, int, int]
-GrayscalePixel = int
+from wrappers.filters.types import GrayscalePixel, RGBPixel
 
 def vxycc709(img: list[list[RGBPixel]]) -> list[GrayscalePixel]:
     """Converts an image from RGB to grayscale using color weights from ITU's report on colorimetry (2018)
@@ -36,7 +35,7 @@ def average(colored_image):
     blue = colored_image[:, :, 1]
     green = colored_image[:, :, 2]
     desaturated_image = red + green + blue
-    desaturated_image = desaturated_image/3
+    desaturated_image = desaturated_image / 3
     return desaturated_image.astype(np.uint8)
 
 
