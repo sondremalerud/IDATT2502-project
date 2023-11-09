@@ -1,9 +1,10 @@
 import numpy as np
 from typing import Literal
 
-from wrappers.filters.types import GrayscalePixel, RGBPixel
+from wrappers.filters.types import GrayscaleImage, RGBImage
 
-def vxycc709(img: list[list[RGBPixel]]) -> list[GrayscalePixel]:
+
+def vxycc709(img: RGBImage) -> GrayscaleImage:
     """Converts an image from RGB to grayscale using color weights from ITU's report on colorimetry (2018)
     Weights chosen are for the vxYCC709 color space
     https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2380-2-2018-PDF-E.pdf"""
@@ -15,59 +16,60 @@ def vxycc709(img: list[list[RGBPixel]]) -> list[GrayscalePixel]:
     green_pixels = GREEN_WEIGHT * img[:, :, 1]
     blue_pixels = BLUE_WEIGHT * img[:, :, 2]
 
-    return (red_pixels + green_pixels + blue_pixels).astype(np.uint8)
+    res = red_pixels + green_pixels + blue_pixels
+    res = res.reshape((img.shape[0], img.shape[1], 1))
+    res = res.astype(np.uint8)
+    return res
 
 
-def vxycc601(colored_image):
+def vxycc601(img: RGBImage) -> GrayscaleImage:
     """Converts an image from RGB to grayscale using color weights from ITU's report on colorimetry (2018)
     Weights chosen are for the vxYCC601 color space
     https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2380-2-2018-PDF-E.pdf"""
-    weighted_red = 0.299 * colored_image[:, :, 0]
-    weighted_blue = 0.587 * colored_image[:, :, 1]
-    weighted_green = 0.114 * colored_image[:, :, 2]
+
+    weighted_red = 0.299 * img[:, :, 0]
+    weighted_blue = 0.587 * img[:, :, 1]
+    weighted_green = 0.114 * img[:, :, 2]
+
     desaturated_image = weighted_red + weighted_green + weighted_blue
-    return desaturated_image.astype(np.uint8)
+
+    res = desaturated_image.reshape((img.shape[0], img.shape[1], 1))
+    res = res.astype(np.uint8)
+    return res
 
 
-def average(colored_image):
+def average(img: RGBImage) -> GrayscaleImage:
     """Converts an image from RGB to grayscale by averaging the color channels"""
-    red = colored_image[:, :, 0]
-    blue = colored_image[:, :, 1]
-    green = colored_image[:, :, 2]
+
+    red = img[:, :, 0]
+    blue = img[:, :, 1]
+    green = img[:, :, 2]
+
     desaturated_image = red + green + blue
     desaturated_image = desaturated_image / 3
-    return desaturated_image.astype(np.uint8)
+
+    res = desaturated_image.reshape((img.shape[0], img.shape[1], 1))
+    res = res.astype(np.uint8)
+    return res
 
 
-def _channel(img: list[list[RGBPixel]], channel: Literal[0, 1, 2]) -> list[GrayscalePixel]:
+def _channel(
+    img: RGBImage, channel: Literal[0, 1, 2]
+) -> GrayscaleImage:
     """Returns a specific color channel from the image"""
-    return img[:, :, channel]
+    return img[:, :, channel].reshape((img.shape[0], img.shape[1], 1))
 
 
-def red_channel(img: list[list[RGBPixel]]) -> list[GrayscalePixel]:
+def red_channel(img: RGBImage) -> GrayscaleImage:
     """Returns the red channel of the image"""
     return _channel(img, 0)
 
 
-def green_channel(img: list[list[RGBPixel]]) -> list[GrayscalePixel]:
+def green_channel(img: RGBImage) -> GrayscaleImage:
     """Returns the green channel of the image"""
     return _channel(img, 1)
 
 
-def blue_channel(img: list[list[RGBPixel]]) -> list[GrayscalePixel]:
+def blue_channel(img: RGBImage) -> GrayscaleImage:
     """Returns the blue channel of the image"""
     return _channel(img, 2)
-
-if __name__ == '__main__':
-    from matplotlib import pyplot as plt
-    
-    img = np.random.randint(0, 255, (8, 8, 3))
-    fig = plt.figure()
-
-    fig.add_subplot(1, 2, 1)
-    plt.imshow(img)
-    
-    fig.add_subplot(1, 2, 2)
-    plt.imshow(vxycc709(img), cmap='Greys_r')
-    
-    plt.show()

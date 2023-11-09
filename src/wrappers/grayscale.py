@@ -9,8 +9,8 @@ class GrayscaleEnv(FilteredEnv):
         super().__init__(env, filter)
 
         self.observation_space = Box(
-            low=self.observation_space.low,
-            high=self.observation_space.high,
+            low=0,
+            high=255,
             shape=(
                 self.observation_space.shape[0],
                 self.observation_space.shape[1],

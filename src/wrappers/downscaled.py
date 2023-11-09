@@ -14,7 +14,7 @@ class DownscaledEnv(FilteredEnv):
             shape=(
                 self.observation_space.shape[0] // scale_factor,
                 self.observation_space.shape[1] // scale_factor,
-                self.observation_space.shape[2]
+                1
             ),
             dtype=self.observation_space.dtype
         )

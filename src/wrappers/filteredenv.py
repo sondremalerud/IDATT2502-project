@@ -17,5 +17,5 @@ class FilteredEnv(Wrapper):
         ), reward, self.terminated, self.truncated, info
 
     def reset(self, seed=None, options=None):
-        screen, info = super().reset(seed, options)
+        screen, info = super().reset(seed=seed, options=options)
         return self.filter(screen, *self.filterargs), info
