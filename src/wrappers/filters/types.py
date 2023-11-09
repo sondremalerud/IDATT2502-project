@@ -1,7 +1,7 @@
-type RGBPixel = tuple[int, int, int]
-type GrayscalePixel = int
+RGBPixel = tuple[int, int, int]
+GrayscalePixel = int
 
-type RGBImage = list[list[RGBPixel]]
-type GrayscaleImage = list[list[GrayscalePixel]]
+RGBImage = list[list[RGBPixel]]
+GrayscaleImage = list[list[GrayscalePixel]]
 
-type Image = RGBImage | GrayscaleImage
+Image = RGBImage | GrayscaleImage
