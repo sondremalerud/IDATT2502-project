@@ -220,7 +220,7 @@ class Agent:
 
     def train(self, episodes=100, steps=4000):
         self.rewards = []
-        for episode in range(num_episodes):
+        for episode in range(episodes):
             ep_reward = 0
             state, info = env.reset()
             state = agent.processFrame(state)
@@ -287,7 +287,7 @@ class Agent:
         exit()
 
 
-num_episodes = 2000
+#num_episodes = 2000
 batch_size = 128
 update_frequency = 10
 training = True
