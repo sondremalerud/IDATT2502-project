@@ -1,4 +1,4 @@
-from mario_bros_env import actions
+-from mario_bros_env import actions
 import numpy as np
 from nes_py.wrappers import JoypadSpace
 import mario_bros_env
@@ -207,14 +207,13 @@ class Agent:
 
     def processFrame(self, state):
         gray_state = grayscale.red_channel(state)
-        rescaled_state = downscale.divide(gray_state, 8)
-        downsampled_state = downsample.downsample(rescaled_state, 4)
-        
-        smaller_state = []
-        for i in range(len(downsampled_state)):
-            smaller_state.append(downsampled_state[i-1][:-2])
+        rescaled_state = downscale.divide(gray_state, 8)  # -> [30,32]
+        downsampled_state = downsample.downsample(rescaled_state, 4)  # reduces to 4 values
 
-        return torch.cat(tuple(torch.tensor(smaller_state)))
+        cropped_state = []
+        for i in range(len(downsampled_state)):
+            cropped_state.append(torch.tensor(downsampled_state[i-1][:-2]))
+        return torch.cat(cropped_state)
     
     # Function to stack frames. stacked_frames is a deque.
     def stack_frames(self, stacked_frames, new_frame, is_new_episode):
