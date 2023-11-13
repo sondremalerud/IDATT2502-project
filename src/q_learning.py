@@ -44,9 +44,9 @@ class Model(nn.Module):
         self.observation_num = observation_num
         self.num_action = num_action
 
-        self.layer1 = nn.Linear(self.observation_num, 128)
+        self.layer1 = nn.Linear(900*4, 128)
         self.layer2 = nn.Linear(128, 128)
-        self.layer3 = nn.Linear(128, self.num_action)
+        self.layer3 = nn.Linear(128, 5)
         # 4 stacked frames as input (which will be one state)
         #self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, stride=1) # 1 frame as state
         #self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1,padding=1)
@@ -61,6 +61,7 @@ class Model(nn.Module):
         
 
     def forward(self,x):
+        x = x.view(-1, 900*4) 
         x = F.relu(self.layer1(x))
         x = F.relu(self.layer2(x))
         x = self.layer3(x)
@@ -100,6 +101,7 @@ class Agent:
                  exp_rate=0.9,
                  min_exp_rate=0.1,
                  exp_decay=0.99991, #FIXME prøv 0.99991 når du trener hjemme
+                 num_stacked_frames=4,
                  ):
 
         self.device = device
@@ -107,6 +109,9 @@ class Agent:
 
         self.action_space_n = action_space_n
         self.observation_space_n = observation_space_n
+
+        # Define the number of stacked frames
+        self.num_stacked_frames = num_stacked_frames
 
         # parameters
         self.memory_capacity = memory_capacity
@@ -131,6 +136,11 @@ class Agent:
 
         # self.target_model.eval()
         self.target_model.load_state_dict(self.model.state_dict())
+
+        # Initialize the deque for frame stacking
+        #self.stacked_frames = deque(maxlen=self.num_stacked_frames)
+        self.stacked_frames = np.zeros((num_stacked_frames, self.observation_space_n))
+
 
     def update_target_model(self):
        
@@ -167,19 +177,74 @@ class Agent:
 
         if exploration_rate_threshold <= exploration_rate:  # do random action
             action = random.randrange(0, self.action_space_n)
-            action_t = torch.tensor([[action]], device=device, dtype=torch.long)
+            action_t = torch.tensor([[action]], device=device, dtype=torch.int64)
+            #print("Random: " + str(action))
         else:
             # action_t = self.model(state).max(dim=1)[1].reshape(1, 1)
-            action_t = self.model(state).argmax().reshape(1, 1)
+            #with torch.no_grad():
+                # print("Exploit: ")
+                # print(self.model(torch.tensor(state, device=device, dtype=torch.float32)))
+            action_argmax = self.model(torch.tensor(state, device=device, dtype=torch.float32)).argmax()
+            #action_t = action_argmax % 5
+           #action_t = action_t.reshape(1, 1)
+            action_t = action_argmax.reshape(1, 1)
+            #print("Exploit: " + str(action_t))
         return action_t
+    
+    def show_state(self,state):
+        gray_state = grayscale.red_channel(state)
+        rescaled_state = downscale.divide(gray_state, 4)
+        downsampled_state = downsample.downsample(rescaled_state, 4)
+
+        smaller_stae = []
+        for i in range(len(downsampled_state)):
+            smaller_stae.append(downsampled_state[i-1][:-2])
+
+
+        fig = plt.figure()
+
+        fig.add_subplot(2, 2, 1)
+        plt.imshow(state)
+
+        fig.add_subplot(2, 2, 2)
+        plt.imshow(gray_state, cmap='Greys_r')
+
+        fig.add_subplot(2, 2, 3)
+        plt.imshow(rescaled_state, cmap="Greys_r")
+
+        fig.add_subplot(2, 2, 4)
+        plt.imshow(smaller_stae, cmap="Greys_r")
+        plt.show()
 
     def processFrame(self, state):
-        gray_state = grayscale.vxycc709(state)
+        gray_state = grayscale.red_channel(state)
         rescaled_state = downscale.divide(gray_state, 8)
         downsampled_state = downsample.downsample(rescaled_state, 4)
+        
+        smaller_state = []
+        for i in range(len(downsampled_state)):
+            smaller_state.append(downsampled_state[i-1][:-2])
+
+       # print(torch.cat(tuple(torch.tensor(smaller_state))).shape)
+        #print(downsampled_state[2:].shape)
         #return downsampled_state
-        return torch.cat(tuple(torch.tensor(downsampled_state)))
+        return torch.cat(tuple(torch.tensor(smaller_state)))
     
+    
+    
+
+    # Function to stack frames. stacked_frames is a deque.
+    def stack_frames(self, stacked_frames, new_frame, is_new_episode):
+        frame = self.processFrame(new_frame)
+
+        if is_new_episode:
+            stacked_frames = np.zeros((self.num_stacked_frames, self.observation_space_n))
+
+        stacked_frames = np.roll(stacked_frames, shift=-1, axis=0)
+        stacked_frames[-1, :] = frame
+
+        return stacked_frames
+
     def optimize(self, batch_size):
         if len(self.replay_memory) < batch_size:
             return
@@ -208,7 +273,51 @@ class Agent:
         loss = F.mse_loss(predicted, Q_sa)
         self.optimizer.zero_grad()
         loss.backward()
+
+        CLIP_NORM = 0.6
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(),CLIP_NORM)
+
         self.optimizer.step()
+    
+    """def optimize(self, batch_size):
+        if len(self.replay_memory) < batch_size:
+            return
+
+        transitions = self.replay_memory.sample(batch_size)
+        batch = Transition(*zip(*transitions))
+
+        state_b = torch.cat(batch.state)
+        next_state_b = torch.cat(batch.next_state)
+        action_b = torch.cat(batch.action).to(torch.int64).unsqueeze(1)
+
+
+        done_t = torch.cat(batch.done).unsqueeze(1)
+
+        target_q = self.target_model(next_state_b)
+        max_target_q = target_q.argmax()
+
+        r = torch.cat(batch.reward)  # dim [n]
+        r = r.unsqueeze(1)  # dim [x,1]
+
+        # Q(s, a) = r + γ * max(Q(s', a')) ||
+        # Q(s, a) = r                      || if state is done
+        Q_sa = r + self.discount * max_target_q * (1 - done_t)  # if done = 1 => Q_result = r
+        Q_sa = Q_sa.reshape(-1, 1)
+        
+        aa = self.model(state_b)
+        print(aa.shape)
+        print(action_b.shape)
+        predicted = torch.gather(input=self.model(state_b), dim=1, index=action_b)
+
+        loss = F.mse_loss(predicted, Q_sa)
+        self.optimizer.zero_grad()
+        loss.backward()
+
+        #clipping gradients 
+        CLIP_NORM = 0.6
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(),CLIP_NORM)
+
+        self.optimizer.step()"""
 
     def plot_rewards(self):
         # Plotting the rewards
@@ -219,34 +328,54 @@ class Agent:
         plt.show()
 
     def train(self, episodes=100, steps=4000):
+        """trains model for n episodes (does not save the model)"""
         self.rewards = []
+        initial_state, _ = env.reset()
+        stacked_frames = np.roll(self.stacked_frames, shift=-1, axis=0)
+        stacked_frames[-1, :] = self.processFrame(initial_state).reshape(-1)
+
         for episode in range(episodes):
             ep_reward = 0
             state, info = env.reset()
-            state = agent.processFrame(state)
-            state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-            
+            #state = agent.processFrame(state)
+            #state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+            #stacked_frames = self.stack_frames(self.stacked_frames, state, True)
+            # Preprocess and update the stacked frames
+
+            stacked_frames = self.stack_frames(stacked_frames, state, True)
+
+
             for s in range(steps):
-                action = agent.action(state)
+                #action = agent.action(state)
+                action = agent.action(stacked_frames)
                 observation, reward, terminated, truncated, info = env.step(action.item())
-                observation = agent.processFrame(observation)
+               # self.show_state(observation)
+                #observation = agent.processFrame(observation)
                 ep_reward += reward
-                
                 reward = torch.tensor([reward], device=device)
 
                 done = terminated or truncated
                 done_t = torch.tensor(done, dtype=torch.float32, device=device).unsqueeze(0)
 
-                next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
+                next_stacked_frames = self.stack_frames(stacked_frames, observation, False)
+               # next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
+                #next_stacked_frames = self.stack_frames(stacked_frames, observation, False)
+
+                stacked_frames_t = torch.tensor(stacked_frames,dtype=torch.float32, device=device).unsqueeze(0)
+                next_stacked_frames_t = torch.tensor(next_stacked_frames,dtype=torch.float32, device=device).unsqueeze(0)
+
 
                 # store
-                agent.replay_memory.push(state, action, next_state, reward, done_t)
+                #agent.replay_memory.push(state, action, next_state, reward, done_t)
+                agent.replay_memory.push(stacked_frames_t, action, next_stacked_frames_t, reward, done_t)
 
-                state = next_state
+
+                stacked_frames = next_stacked_frames
 
                 # optimize
                 agent.optimize(batch_size)
 
+        
                 if s % update_frequency == 0:
                     agent.update_target_model()
 
@@ -296,16 +425,16 @@ training = True
 if training:
     env = mario_bros_env.make(
         'SuperMarioBros-v0',
-        render_mode=None
+        render_mode="human"
     )
     env = JoypadSpace(env, RIGHT_ONLY)
 
     env_action_num = env.action_space.n
     state, info = env.reset()
-    n_observations = 32*30
+    n_observations = 900
    
 
-    agent = Agent(env, n_observations, env_action_num)
+    agent = Agent(env, n_observations, env_action_num, exp_rate=0.1)
     #state= agent.processFrame(state)
     #print(state.shape)
     
@@ -332,7 +461,7 @@ else:
 
     env_action_num = env.action_space.n
     state, info = env.reset()
-    n_observations = 30*32
+    n_observations = 28*32
 
     agent = Agent(env, n_observations, env_action_num, 
     exp_rate=0.2,
