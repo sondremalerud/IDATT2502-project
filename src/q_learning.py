@@ -57,8 +57,6 @@ class Model(nn.Module):
 
   #      self.image_dimentions = (30,32)
    #     self.num_colors = 4
- 
-        
 
     def forward(self,x):
         x = x.view(-1, 900*4) 
@@ -138,7 +136,6 @@ class Agent:
         self.target_model.load_state_dict(self.model.state_dict())
 
         # Initialize the deque for frame stacking
-        #self.stacked_frames = deque(maxlen=self.num_stacked_frames)
         self.stacked_frames = np.zeros((num_stacked_frames, self.observation_space_n))
 
 
@@ -178,17 +175,9 @@ class Agent:
         if exploration_rate_threshold <= exploration_rate:  # do random action
             action = random.randrange(0, self.action_space_n)
             action_t = torch.tensor([[action]], device=device, dtype=torch.int64)
-            #print("Random: " + str(action))
         else:
-            # action_t = self.model(state).max(dim=1)[1].reshape(1, 1)
-            #with torch.no_grad():
-                # print("Exploit: ")
-                # print(self.model(torch.tensor(state, device=device, dtype=torch.float32)))
             action_argmax = self.model(torch.tensor(state, device=device, dtype=torch.float32)).argmax()
-            #action_t = action_argmax % 5
-           #action_t = action_t.reshape(1, 1)
             action_t = action_argmax.reshape(1, 1)
-            #print("Exploit: " + str(action_t))
         return action_t
     
     def show_state(self,state):
@@ -225,14 +214,8 @@ class Agent:
         for i in range(len(downsampled_state)):
             smaller_state.append(downsampled_state[i-1][:-2])
 
-       # print(torch.cat(tuple(torch.tensor(smaller_state))).shape)
-        #print(downsampled_state[2:].shape)
-        #return downsampled_state
         return torch.cat(tuple(torch.tensor(smaller_state)))
     
-    
-    
-
     # Function to stack frames. stacked_frames is a deque.
     def stack_frames(self, stacked_frames, new_frame, is_new_episode):
         frame = self.processFrame(new_frame)
@@ -278,46 +261,7 @@ class Agent:
         torch.nn.utils.clip_grad_norm_(self.model.parameters(),CLIP_NORM)
 
         self.optimizer.step()
-    
-    """def optimize(self, batch_size):
-        if len(self.replay_memory) < batch_size:
-            return
-
-        transitions = self.replay_memory.sample(batch_size)
-        batch = Transition(*zip(*transitions))
-
-        state_b = torch.cat(batch.state)
-        next_state_b = torch.cat(batch.next_state)
-        action_b = torch.cat(batch.action).to(torch.int64).unsqueeze(1)
-
-
-        done_t = torch.cat(batch.done).unsqueeze(1)
-
-        target_q = self.target_model(next_state_b)
-        max_target_q = target_q.argmax()
-
-        r = torch.cat(batch.reward)  # dim [n]
-        r = r.unsqueeze(1)  # dim [x,1]
-
-        # Q(s, a) = r + γ * max(Q(s', a')) ||
-        # Q(s, a) = r                      || if state is done
-        Q_sa = r + self.discount * max_target_q * (1 - done_t)  # if done = 1 => Q_result = r
-        Q_sa = Q_sa.reshape(-1, 1)
-        
-        aa = self.model(state_b)
-        print(aa.shape)
-        print(action_b.shape)
-        predicted = torch.gather(input=self.model(state_b), dim=1, index=action_b)
-
-        loss = F.mse_loss(predicted, Q_sa)
-        self.optimizer.zero_grad()
-        loss.backward()
-
-        #clipping gradients 
-        CLIP_NORM = 0.6
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(),CLIP_NORM)
-
-        self.optimizer.step()"""
+ 
 
     def plot_rewards(self):
         # Plotting the rewards
@@ -337,20 +281,13 @@ class Agent:
         for episode in range(episodes):
             ep_reward = 0
             state, info = env.reset()
-            #state = agent.processFrame(state)
-            #state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-            #stacked_frames = self.stack_frames(self.stacked_frames, state, True)
-            # Preprocess and update the stacked frames
-
             stacked_frames = self.stack_frames(stacked_frames, state, True)
 
 
             for s in range(steps):
-                #action = agent.action(state)
                 action = agent.action(stacked_frames)
                 observation, reward, terminated, truncated, info = env.step(action.item())
-               # self.show_state(observation)
-                #observation = agent.processFrame(observation)
+
                 ep_reward += reward
                 reward = torch.tensor([reward], device=device)
 
@@ -358,15 +295,11 @@ class Agent:
                 done_t = torch.tensor(done, dtype=torch.float32, device=device).unsqueeze(0)
 
                 next_stacked_frames = self.stack_frames(stacked_frames, observation, False)
-               # next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
-                #next_stacked_frames = self.stack_frames(stacked_frames, observation, False)
-
+             
                 stacked_frames_t = torch.tensor(stacked_frames,dtype=torch.float32, device=device).unsqueeze(0)
                 next_stacked_frames_t = torch.tensor(next_stacked_frames,dtype=torch.float32, device=device).unsqueeze(0)
 
-
                 # store
-                #agent.replay_memory.push(state, action, next_state, reward, done_t)
                 agent.replay_memory.push(stacked_frames_t, action, next_stacked_frames_t, reward, done_t)
 
 
@@ -407,7 +340,7 @@ class Agent:
 
 
     def custom_interrupt_handler(self,signum, frame):
-        # This function will be called when Ctrl+C is pressed
+        """This function will be called when Ctrl+C is pressed"""
         print("\nCustom interrupt handler activated.")
         self.save_model()
         print("Q_values saved")
@@ -420,7 +353,7 @@ class Agent:
 batch_size = 128
 update_frequency = 10
 training = True
-
+observation_n =30*30
 
 if training:
     env = mario_bros_env.make(
@@ -431,18 +364,12 @@ if training:
 
     env_action_num = env.action_space.n
     state, info = env.reset()
-    n_observations = 900
-   
+    n_observations = observation_n
 
     agent = Agent(env, n_observations, env_action_num, exp_rate=0.1)
-    #state= agent.processFrame(state)
-    #print(state.shape)
     
     state, _ = env.reset()
     state = torch.tensor(state.copy(), dtype=torch.float32, device=device).unsqueeze(0)
-   # model = Model(env)
-    #target_model = Model(env)
-    #target_model.load_state_dict(model.state_dict)
 
     # Register the custom interrupt handler for Ctrl+C (SIGINT)
     signal.signal(signal.SIGINT, agent.custom_interrupt_handler)
@@ -450,7 +377,6 @@ if training:
     agent.save_model()
     agent.plot_rewards()
 
-    #model.run()
 
 else:
     env = mario_bros_env.make(
@@ -461,21 +387,18 @@ else:
 
     env_action_num = env.action_space.n
     state, info = env.reset()
-    n_observations = 28*32
+    n_observations = observation_n
 
     agent = Agent(env, n_observations, env_action_num, 
-    exp_rate=0.2,
+    exp_rate=0.1,
     )
     agent.load_model()
 
     state, _ = env.reset()
     state = torch.tensor(state.copy(), dtype=torch.float32, device=device).unsqueeze(0)
-   # model = Model(env)
-    #target_model = Model(env)
-    #target_model.load_state_dict(model.state_dict)
 
     # Register the custom interrupt handler for Ctrl+C (SIGINT)
     signal.signal(signal.SIGINT, agent.custom_interrupt_handler)
     agent.train(episodes=1000)
     agent.plot_rewards()
-   # model.run()
+
