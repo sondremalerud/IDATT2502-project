@@ -1,281 +1,42 @@
-from collections import defaultdict
-
-import matplotlib.pyplot as plt
-import torch
-from tensordict.nn import TensorDictModule
-from tensordict.nn.distributions import NormalParamExtractor
-from torch import nn
-from torchrl.collectors import SyncDataCollector
-from torchrl.data.replay_buffers import ReplayBuffer
-from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
-from torchrl.data.replay_buffers.storages import LazyTensorStorage
-from torchrl.envs import (Compose, DoubleToFloat, ObservationNorm, StepCounter,
-                          TransformedEnv)
-from torchrl.envs.libs.gym import GymWrapper
-from torchrl.envs.utils import check_env_specs, set_exploration_mode
-from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
-from torchrl.objectives import ClipPPOLoss
-from torchrl.objectives.value import GAE
-from tqdm import tqdm
-
 import mario_bros_env
-import wrappers.filtered
-from mario_bros_env.actions import RIGHT_ONLY
 from nes_py.wrappers import JoypadSpace
+from mario_bros_env.actions import SIMPLE_MOVEMENT
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
+from wrappers import GrayscaleEnv, DownsampledEnv, DownscaledEnv
+from wrappers.filters import GrayscaleFilters
+# tjuvlånt fra https://github.com/BJEnrik/reinforcement-learning-super-mario
 
-##########################
-# Define Hyperparameters #
-##########################
-device = "cpu" if not torch.cuda.is_available() else "cuda:0"
-num_cells = 256  # number of cells in each layer i.e. output dim.
-lr = 3e-4
-max_grad_norm = 1.0
+env = mario_bros_env.make("SuperMarioBros-v0", render_mode="human")
+env = JoypadSpace(env, SIMPLE_MOVEMENT)
 
-###############################
-# Data collection parameters #
-##############################
-frame_skip = 1
-frames_per_batch = 1000 // frame_skip
-# For a complete training, bring the number of frames up to 1M
-total_frames = 50_000 // frame_skip
+env = GrayscaleEnv(env, GrayscaleFilters.RED)
+env = DownscaledEnv(env, 12)
+env = DownsampledEnv(env, 4)
 
-##################
-# PPO parameters #
-##################
-sub_batch_size = 64  # cardinality of the sub-samples gathered from the current data in the inner loop
-num_epochs = 10  # optimization steps per batch of data collected
-clip_epsilon = (
-    0.2  # clip value for PPO loss: see the equation in the intro for more context.
-)
-gamma = 0.99
-lmbda = 0.95
-entropy_eps = 1e-4
+env = DummyVecEnv([lambda: env])
+env = VecFrameStack(env, 8, channels_order="last")
 
+model: PPO
 
-#########################
-# Define an environment #
-#########################
-base_env = wrappers.filtered.FilteredMarioEnv(render_mode="human")
-base_env = JoypadSpace(base_env, RIGHT_ONLY)
-base_env = GymWrapper(base_env, device=device)
+try:
+     print("Trying to load stored pre-trained model...")
+     model = PPO.load("models/PPO.zip", env)
+     print("Loaded! :)")
+except BaseException:
+     print("Failed to load existing model, creating new")
+     model = PPO("MlpPolicy", env, verbose=True)
 
+try:
+     model = model.learn(total_timesteps=1024 * 1024, progress_bar=True)
+except KeyboardInterrupt:
+     print("Saving and quitting...")
+     model.save("models/PPO.zip")
+     print("Saved :)")
+     exit(1)
 
-##################
-# Normalization #
-#################
-env = TransformedEnv(
-    base_env,
-    Compose(
-        # normalize observations
-        ObservationNorm(in_keys=["pixels"], standard_normal=True),
-        DoubleToFloat(in_keys=["pixels"]),
-        StepCounter(),
-    ),   
-)
+state = env.reset()
 
-env.transform[0].init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
-print("normalization constant shape:", env.transform[0].loc.shape)
-print("observation_spec:", env.observation_spec)
-print("reward_spec:", env.reward_spec)
-print("input_spec:", env.input_spec)
-print("action_spec (as defined by input_spec):", env.action_spec)
-
-check_env_specs(env)
-
-rollout = env.rollout(3)
-print("rollout of three steps:", rollout)
-print("Shape of the rollout TensorDict:", rollout.batch_size)
-
-###########
-# Policy #
-##########
-
-actor_net = nn.Sequential(
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(2 * env.action_spec.shape[-1], device=device),
-    NormalParamExtractor(),
-)
-
-policy_module = TensorDictModule(
-    actor_net, in_keys=["observation"], out_keys=["loc", "scale"]
-)
-
-
-policy_module = ProbabilisticActor(
-    module=policy_module,
-    spec=env.action_spec,
-    in_keys=["loc", "scale"],
-    distribution_class=TanhNormal,
-    distribution_kwargs={
-        "min": env.action_spec.space.minimum,
-        "max": env.action_spec.space.maximum,
-    },
-    return_log_prob=True,
-    # we'll need the log-prob for the numerator of the importance weights
-)
-
-
-#################
-# Value network #
-#################
-value_net = nn.Sequential(
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(1, device=device),
-)
-
-value_module = ValueOperator(
-    module=value_net,
-    in_keys=["observation"],
-)
-
-print("Running policy:", policy_module(env.reset()))
-print("Running value:", value_module(env.reset()))
-
-##################
-# Data collector #
-##################
-
-collector = SyncDataCollector(
-    env,
-    policy_module,
-    frames_per_batch=frames_per_batch,
-    total_frames=total_frames,
-    split_trajs=False,
-    device=device,
-)
-
-
-##################
-# Replay buffer #
-#################
-replay_buffer = ReplayBuffer(
-    storage=LazyTensorStorage(frames_per_batch),
-    sampler=SamplerWithoutReplacement(),
-)
-
-#################
-# Loss function #
-#################
-advantage_module = GAE(
-    gamma=gamma, lmbda=lmbda, value_network=value_module, average_gae=True
-)
-
-loss_module = ClipPPOLoss(
-    actor=policy_module,
-    critic=value_module,
-    advantage_key="advantage",
-    clip_epsilon=clip_epsilon,
-    entropy_bonus=bool(entropy_eps),
-    entropy_coef=entropy_eps,
-    # these keys match by default but we set this for completeness
-    value_target_key=advantage_module.value_target_key,
-    critic_coef=1.0,
-    gamma=0.99,
-    loss_critic_type="smooth_l1",
-)
-
-optim = torch.optim.Adam(loss_module.parameters(), lr)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    optim, total_frames // frames_per_batch, 0.0
-)
-
-#################
-# Training loop #
-#################
-logs = defaultdict(list)
-pbar = tqdm(total=total_frames * frame_skip)
-eval_str = ""
-
-# We iterate over the collector until it reaches the total number of frames it was
-# designed to collect:
-for i, tensordict_data in enumerate(collector):
-    # we now have a batch of data to work with. Let's learn something from it.
-    for _ in range(num_epochs):
-        # We'll need an "advantage" signal to make PPO work.
-        # We re-compute it at each epoch as its value depends on the value
-        # network which is updated in the inner loop.
-        advantage_module(tensordict_data)
-        data_view = tensordict_data.reshape(-1)
-        replay_buffer.extend(data_view.cpu())
-        for _ in range(frames_per_batch // sub_batch_size):
-            subdata = replay_buffer.sample(sub_batch_size)
-            loss_vals = loss_module(subdata.to(device))
-            loss_value = (
-                loss_vals["loss_objective"]
-                + loss_vals["loss_critic"]
-                + loss_vals["loss_entropy"]
-            )
-
-            # Optimization: backward, grad clipping and optimization step
-            loss_value.backward()
-            # this is not strictly mandatory but it's good practice to keep
-            # your gradient norm bounded
-            torch.nn.utils.clip_grad_norm_(loss_module.parameters(), max_grad_norm)
-            optim.step()
-            optim.zero_grad()
-
-    logs["reward"].append(tensordict_data["next", "reward"].mean().item())
-    pbar.update(tensordict_data.numel() * frame_skip)
-    cum_reward_str = (
-        f"average reward={logs['reward'][-1]: 4.4f} (init={logs['reward'][0]: 4.4f})"
-    )
-    logs["step_count"].append(tensordict_data["step_count"].max().item())
-    stepcount_str = f"step count (max): {logs['step_count'][-1]}"
-    logs["lr"].append(optim.param_groups[0]["lr"])
-    lr_str = f"lr policy: {logs['lr'][-1]: 4.4f}"
-    if i % 10 == 0:
-        # We evaluate the policy once every 10 batches of data.
-        # Evaluation is rather simple: execute the policy without exploration
-        # (take the expected value of the action distribution) for a given
-        # number of steps (1000, which is our ``env`` horizon).
-        # The ``rollout`` method of the ``env`` can take a policy as argument:
-        # it will then execute this policy at each step.
-        with set_exploration_mode("mean"), torch.no_grad():
-            # execute a rollout with the trained policy
-            eval_rollout = env.rollout(1000, policy_module)
-            logs["eval reward"].append(eval_rollout["next", "reward"].mean().item())
-            logs["eval reward (sum)"].append(
-                eval_rollout["next", "reward"].sum().item()
-            )
-            logs["eval step_count"].append(eval_rollout["step_count"].max().item())
-            eval_str = (
-                f"eval cumulative reward: {logs['eval reward (sum)'][-1]: 4.4f} "
-                f"(init: {logs['eval reward (sum)'][0]: 4.4f}), "
-                f"eval step-count: {logs['eval step_count'][-1]}"
-            )
-            del eval_rollout
-    pbar.set_description(", ".join([eval_str, cum_reward_str, stepcount_str, lr_str]))
-
-    # We're also using a learning rate scheduler. Like the gradient clipping,
-    # this is a nice-to-have but nothing necessary for PPO to work.
-    scheduler.step()
-
-
-
-############
-# Results #
-###########
-plt.figure(figsize=(10, 10))
-plt.subplot(2, 2, 1)
-plt.plot(logs["reward"])
-plt.title("training rewards (average)")
-plt.subplot(2, 2, 2)
-plt.plot(logs["step_count"])
-plt.title("Max step count (training)")
-plt.subplot(2, 2, 3)
-plt.plot(logs["eval reward (sum)"])
-plt.title("Return (test)")
-plt.subplot(2, 2, 4)
-plt.plot(logs["eval step_count"])
-plt.title("Max step count (test)")
-plt.show()
+while True:
+    action, _ = model.predict(state)
+    state, reward, done, info = env.step(action)

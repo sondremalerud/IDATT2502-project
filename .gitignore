@@ -4,6 +4,9 @@
 # Jakob's virtual env
 ml-env
 
+# Zipped PPO model parameters
+*.zip
+
 #Jetbrains
 .idea
 
