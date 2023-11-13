@@ -12,9 +12,9 @@ class GrayscaleEnv(FilteredEnv):
             low=0,
             high=255,
             shape=(
-                self.observation_space.shape[0],
+                self.env.observation_space.shape[0],
                 self.observation_space.shape[1],
                 1
             ),
-            dtype=self.observation_space.dtype
+            dtype=self.env.observation_space.dtype
         )

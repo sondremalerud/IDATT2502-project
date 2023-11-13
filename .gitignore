@@ -1,6 +1,9 @@
 # Stop Sondre's Mac from making a mess
 .DS_Store
 
+# Jakob's virtual env
+ml-env
+
 #Jetbrains
 .idea
 

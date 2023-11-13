@@ -12,6 +12,6 @@ class DownsampledEnv(FilteredEnv):
         self.observation_space = Box(
             low=0,
             high=sample_depth - 1,
-            shape=self.observation_space.shape,
-            dtype=self.observation_space.dtype,
+            shape=self.env.observation_space.shape,
+            dtype=self.env.observation_space.dtype,
         )
