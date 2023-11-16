@@ -14,7 +14,51 @@ The number of methods to convert an image from colour to grayscale is practicall
     \item RGB channel isolation, naive methods that simply return the red, green or blue colour channel of the image unaltered
 \end{itemize}
 
-TODO: BILDE SOM VISER SAMME FRAME BEHANDLET MED ALLE DE FORSKJELLIGE METODENE
+
+\begin{figure}[ht]
+    \begin{subfigure}{\textwidth}
+        \centering
+        \includegraphics*[width=.5\textwidth]{images/bw_comparison/original.png}
+        \caption*{Original frame}
+    \end{subfigure}
+
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/avg.png}
+        \caption*{RGB average}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/ycc601.png}
+        \caption*{YCC$_{601}$}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/ycc709.png}
+        \caption*{YCC$_{709}$}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/red_channel.png}
+        \caption*{Red channel}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/green_channel.png}
+        \caption*{Green channel}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/blue_channel.png}
+        \caption*{Blue channel}
+    \end{subfigure}
+    \caption{A game frame as processed with all implemented grayscale filters}
+\end{figure}
 
 \subsection{Downscaling}
 

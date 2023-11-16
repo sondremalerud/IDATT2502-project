@@ -1,6 +1,12 @@
 # Stop Sondre's Mac from making a mess
 .DS_Store
 
+# Jakob's virtual env
+ml-env
+
+# Zipped PPO model parameters
+*.zip
+
 #Jetbrains
 .idea
 
@@ -20,3 +26,4 @@
 *.synctex.gz
 *.pdf
 
+**/q_values.npy
