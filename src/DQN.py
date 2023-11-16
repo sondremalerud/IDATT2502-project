@@ -53,7 +53,7 @@ class Model(nn.Module):
         self.layer1 = nn.Linear(30*30*4, 128) #TODO LINEAR
 
         self.layer2 = nn.Linear(128, 128)
-        self.layer3 = nn.Linear(128, 5)
+        self.layer3 = nn.Linear(128, self.num_action)
 
 
 
@@ -166,7 +166,7 @@ class Agent:
         else:
             action_argmax = self.model(torch.tensor(state, device=device, dtype=torch.float32)).argmax()
             #print(action_argmax)
-            action = action_argmax % 5
+            action = action_argmax % self.action_space_n
             action_t = action.reshape(1, 1)
         return action_t
     
