@@ -2,7 +2,7 @@ from mario_bros_env import actions
 import numpy as np
 from nes_py.wrappers import JoypadSpace
 import mario_bros_env
-from mario_bros_env.actions import RIGHT_ONLY
+from mario_bros_env.actions import *
 from filters import grayscale, downscale, downsample
 import signal
 import sys
@@ -170,7 +170,7 @@ class Agent:
             action_t = action.reshape(1, 1)
         return action_t
     
-    def show_state(self,state):
+    def display_state(self,state):
         gray_state = grayscale.red_channel(state)
         rescaled_state = downscale.divide(gray_state, 4)
         downsampled_state = downsample.downsample(rescaled_state, 4)
@@ -196,6 +196,7 @@ class Agent:
         plt.show()
 
     def processFrame(self, state):
+        """Greysscales, downscales, and downsample image. Returns 30x30 image"""
         gray_state = grayscale.red_channel(state)
         rescaled_state = downscale.divide(gray_state, 8)  # -> [30,32]
         downsampled_state = downsample.downsample(rescaled_state, 4)  # reduces to 4 values
@@ -205,8 +206,9 @@ class Agent:
             cropped_state.append(torch.tensor(downsampled_state[i-1][:-2]))
         return cropped_state
     
-    # Function to stack frames. stacked_frames is a deque.
+    
     def stack_frames(self, stacked_frames, new_frame, is_new_episode):
+        """Function to stack frames. stacked_frames is a deque."""
         frame = self.processFrame(new_frame)
 
         if is_new_episode:
@@ -329,7 +331,7 @@ if training:
         'SuperMarioBros-v0',
         render_mode="human"
     )
-    env = JoypadSpace(env, RIGHT_ONLY)
+    env = JoypadSpace(env, SIMPLE_MOVEMENT)
 
     env_action_num = env.action_space.n
     state, info = env.reset()
@@ -353,7 +355,7 @@ else:
         'SuperMarioBros-v0',
         render_mode="human"
     )
-    env = JoypadSpace(env, RIGHT_ONLY)
+    env = JoypadSpace(env, SIMPLE_MOVEMENT)
 
     env_action_num = env.action_space.n
     state, info = env.reset()
