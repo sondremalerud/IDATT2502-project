@@ -3,36 +3,44 @@ import mario_bros_env
 from mario_bros_env.actions import RIGHT_ONLY
 from matplotlib import pyplot as plt
 
-from filters import grayscale, downscale, downsample
+import wrappers.filters
 
-env = mario_bros_env.make(
-    'SuperMarioBros-v0',
-    render_mode=None
-)
+env = mario_bros_env.make("SuperMarioBros-v0", render_mode=None)
 env = JoypadSpace(env, RIGHT_ONLY)
 
 state, info = env.reset()
 
-for _ in range(200):
+for _ in range(500):
     state, _, _, _, _ = env.step(env.action_space.sample())
-
-gray_state = grayscale.red_channel(state)
-rescaled_state = downscale.divide(gray_state, 8)
-downsampled_state = downsample.downsample(rescaled_state, 4)
 
 fig = plt.figure()
 
-fig.add_subplot(2, 2, 1)
-plt.imshow(state)
+plt.subplot(2, 2, 1)
+plt.title("Original frame")
+plt.axis('off')
+plt.imshow(state, cmap="Greys_r")
 
-fig.add_subplot(2, 2, 2)
-plt.imshow(gray_state, cmap='Greys_r')
+state = wrappers.filters.red_channel(state)
 
-fig.add_subplot(2, 2, 3)
-plt.imshow(rescaled_state, cmap="Greys_r")
+plt.subplot(2, 2, 2)
+plt.title("Red channel only")
+plt.axis('off')
+plt.imshow(state, cmap="Greys_r")
 
-fig.add_subplot(2, 2, 4)
-plt.imshow(downsampled_state, cmap="Greys_r")
+state = wrappers.filters.downscale.divide(state, 12)
+
+plt.subplot(2, 2, 3)
+plt.title("Downscaled")
+plt.axis('off')
+plt.imshow(state, cmap="Greys_r")
+
+state = wrappers.filters.downsample(state, 6)
+
+plt.subplot(2, 2, 4)
+plt.title("Downsampled")
+plt.axis('off')
+plt.imshow(state, cmap="Greys_r")
+
 plt.show()
 
 env.close()

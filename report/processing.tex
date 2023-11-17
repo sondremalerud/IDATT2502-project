@@ -1,0 +1,75 @@
+\section{Image processing}
+
+Our machine learning model takes images of the game as its input, and the NES outputs colour images at a resolution of 240 pixels by 256 pixels. If we were to use this entire image as the input for our model, the state dimension of our Q-table would have a size of $240 \cdot 256 \cdot 3 \cdot 256 = 47,185,920$ which is rather large. We can reduce all these numbers (horizontal resolution, vertical resolution, channels per pixel and sample depth) by downscaling and downsampling the images, and by converting them from colour to grayscale.
+
+\subsection{Grayscale conversion}
+
+The number of methods to convert an image from colour to grayscale is practically infinite, and we theorized early on that our choice grayscale conversion method would impact model performance. We wanted to ensure that our conversion method resulted in an image where Mario, who is primarily red, would stand out from the primarily sky blue background. We decided to implement a small selection of conversions with different characteristics to benchmark them and see if they affect model performance.
+
+\subsubsection*{Implemented grayscale conversion methods}
+
+\begin{itemize}
+    \item vxYCC$_{601}$ and vxYCC$_{709}$, two weighted sums of the red, green and blue channels that aim to be perceptually neutral. Weights are provided by a report from the International Telecommunications Union on Television Colorimetry (https://www.itu.int/dms\_pub/itu-r/opb/rep/R-REP-BT.2380-2-2018-PDF-E.pdf)
+    \item RGB pixel average, a naive approach that simply averages the red, green and blue channels of the image
+    \item RGB channel isolation, naive methods that simply return the red, green or blue colour channel of the image unaltered
+\end{itemize}
+
+
+\begin{figure}[ht]
+    \begin{subfigure}{\textwidth}
+        \centering
+        \includegraphics*[width=.5\textwidth]{images/bw_comparison/original.png}
+        \caption*{Original frame}
+    \end{subfigure}
+
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/avg.png}
+        \caption*{RGB average}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/ycc601.png}
+        \caption*{YCC$_{601}$}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/ycc709.png}
+        \caption*{YCC$_{709}$}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/red_channel.png}
+        \caption*{Red channel}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/green_channel.png}
+        \caption*{Green channel}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.16\textwidth}
+        \centering
+        \includegraphics*[width=\textwidth]{images/bw_comparison/blue_channel.png}
+        \caption*{Blue channel}
+    \end{subfigure}
+    \caption{A game frame as processed with all implemented grayscale filters}
+\end{figure}
+
+\subsection{Downscaling}
+
+As our image data is already represented by a NumPy array, we were able to use pre-existing NumPy methods to downscale the image with a configurable $K \times K$ kernel size, taking the average over a group of pixels to calculate the colour of the resulting pixel in the output image.
+
+\subsection{Downsampling}
+
+In full 8-bit grayscale, our images still hold a lot of data that might be redundant. We created a simple downsampling filter to further reduce the complexity of our model's input, utilizing the power of integer division and NumPy's vectorization.
+
+\subsection{Results}
+
+By employing both downsampling and grayscale conversions, we were able to significantly reduce the size of the state dimension of the Q-table. By converting the image to grayscale, downscaling with a scale factor of 8 and downsampling with a sample depth of 4 the state size was reduced to $30 \cdot 32 \cdot 4 = 3840$, a reduction to $0.0081\%$ of the original observation space.
+
+NOE OM YTELSE HER TAKK :)
