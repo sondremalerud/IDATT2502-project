@@ -3,7 +3,8 @@ import numpy as np
 from nes_py.wrappers import JoypadSpace
 import mario_bros_env
 from mario_bros_env.actions import *
-from filters import grayscale, downscale, downsample
+from wrappers import GrayscaleEnv, DownsampledEnv, DownscaledEnv
+from wrappers.filters import GrayscaleFilters
 import signal
 import sys
 import torch
@@ -48,9 +49,9 @@ class Model(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
        
         self.conv2_out = 64
-        #self.layer1 = nn.Linear((self.conv2_out), 128) #FIXME CONV
+        self.layer1 = nn.Linear((self.conv2_out), 128) #FIXME CONV
 
-        self.layer1 = nn.Linear(30*30*4, 128) #TODO LINEAR
+        #self.layer1 = nn.Linear(30*30*4, 128) #TODO LINEAR
 
         self.layer2 = nn.Linear(128, 128)
         self.layer3 = nn.Linear(128, self.num_action)
@@ -62,15 +63,15 @@ class Model(nn.Module):
 
     def forward(self,x):
         
-        #x = self.conv1(x) #FIXME CONV
-        #x = nn.functional.relu(x) #FIXME CONV
+        x = self.conv1(x) #FIXME CONV
+        x = nn.functional.relu(x) #FIXME CONV
 
-        #x = self.conv2(x) #FIXME CONV
-        #x = nn.functional.relu(x) #FIXME CONV
+        x = self.conv2(x) #FIXME CONV
+        x = nn.functional.relu(x) #FIXME CONV
        
        
-        x = x.view(-1, 900*4) #TODO LINEAR
-        #x = x.view(-1, self.conv2_out)  #FIXME CONV
+        #x = x.view(-1, 900*4) #TODO LINEAR
+        x = x.view(-1, self.conv2_out)  #FIXME CONV
         x = F.relu(self.layer1(x))
         x = F.relu(self.layer2(x))
         x = self.layer3(x)
@@ -84,10 +85,10 @@ class Agent:
                 action_space_n,
                 memory_capacity=100_000,
                 discount=0.99,
-                learning_rate=0.001,
+                learning_rate=0.0005,
                 exp_rate=0.9,
-                min_exp_rate=0.1,
-                exp_decay=0.99991, #FIXME prøv 0.99991 når du trener hjemme
+                min_exp_rate=0.05,
+                exp_decay=0.99, #FIXME prøv 0.99991 når du trener hjemme
                 num_stacked_frames=4,
                  ):
 
@@ -170,41 +171,20 @@ class Agent:
             action_t = action.reshape(1, 1)
         return action_t
     
-    def display_state(self,state):
-        gray_state = grayscale.red_channel(state)
-        rescaled_state = downscale.divide(gray_state, 4)
-        downsampled_state = downsample.downsample(rescaled_state, 4)
-
-        smaller_stae = []
-        for i in range(len(downsampled_state)):
-            smaller_stae.append(downsampled_state[i-1][:-2])
-
-
-        fig = plt.figure()
-
-        fig.add_subplot(2, 2, 1)
-        plt.imshow(state)
-
-        fig.add_subplot(2, 2, 2)
-        plt.imshow(gray_state, cmap='Greys_r')
-
-        fig.add_subplot(2, 2, 3)
-        plt.imshow(rescaled_state, cmap="Greys_r")
-
-        fig.add_subplot(2, 2, 4)
-        plt.imshow(smaller_stae, cmap="Greys_r")
-        plt.show()
 
     def processFrame(self, state):
         """Greysscales, downscales, and downsample image. Returns 30x30 image"""
-        gray_state = grayscale.red_channel(state)
-        rescaled_state = downscale.divide(gray_state, 8)  # -> [30,32]
-        downsampled_state = downsample.downsample(rescaled_state, 4)  # reduces to 4 values
-
+        #gray_state = grayscale.red_channel(state)
+        #rescaled_state = downscale.divide(gray_state, 8)  # -> [30,32]
+        #downsampled_state = downsample.downsample(rescaled_state, 4)  # reduces to 4 values
+        state = np.squeeze(state)
         cropped_state = []
-        for i in range(len(downsampled_state)):
-            cropped_state.append(torch.tensor(downsampled_state[i-1][:-2]))
-        return cropped_state
+        for i in range(len(state)):
+            cropped_state.append(torch.tensor(state[i-1][:-2]))
+
+        # Normalize pixel values to the range [0, 1]
+        result = [element / 255 for element in cropped_state]
+        return result
     
     
     def stack_frames(self, stacked_frames, new_frame, is_new_episode):
@@ -249,21 +229,24 @@ class Agent:
         self.optimizer.zero_grad()
         loss.backward()
 
-        CLIP_NORM = 0.6
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(),CLIP_NORM)
+        #CLIP_NORM = 0.6
+        #torch.nn.utils.clip_grad_norm_(self.model.parameters(),CLIP_NORM)
 
         self.optimizer.step()
 
 
     def plot_rewards(self):
-        # Plotting the rewards
-        plt.plot(self.rewards, marker='o')
-        plt.title('Rewards per Episode')
-        plt.xlabel('Episode')
-        plt.ylabel('Reward')
-        plt.show()
+        """ Plots mean rewards """
+        mean_rewards = []
 
-    def train(self, episodes=100, steps=4000):
+        for t in range(len(self.rewards)):
+            mean_rewards.append(np.mean(self.rewards[max(0, t-100):(t+1)]))
+        plt.plot(mean_rewards)
+        plt.xlabel('Episode')
+        plt.ylabel('Mean Reward')
+        plt.savefig('rewards.png')
+
+    def train(self, episodes=100, steps=10_000):
         """trains model for n episodes (does not save the model)"""
         self.rewards = []
         initial_state, _ = env.reset()
@@ -322,7 +305,7 @@ class Agent:
 
 #num_episodes = 2000
 batch_size = 32 # also try: 128
-update_frequency = 10
+update_frequency = 1000
 training = True
 observation_n =30*30
 
@@ -331,13 +314,18 @@ if training:
         'SuperMarioBros-v0',
         render_mode="human"
     )
-    env = JoypadSpace(env, SIMPLE_MOVEMENT)
+    env = JoypadSpace(env, RIGHT_ONLY)
+
+    # Process frames
+    env = GrayscaleEnv(env, GrayscaleFilters.RED)
+    env = DownscaledEnv(env, 8)
+    #env = DownsampledEnv(env, 4)
 
     env_action_num = env.action_space.n
     state, info = env.reset()
     n_observations = observation_n
 
-    agent = Agent(env, n_observations, env_action_num, exp_rate=0.1)
+    agent = Agent(env, n_observations, env_action_num, exp_rate=1.0)
     
     state, _ = env.reset()
     state = torch.tensor(state.copy(), dtype=torch.float32, device=device).unsqueeze(0)
@@ -356,6 +344,11 @@ else:
         render_mode="human"
     )
     env = JoypadSpace(env, SIMPLE_MOVEMENT)
+
+    # Process frames
+    env = GrayscaleEnv(env, GrayscaleFilters.RED)
+    env = DownscaledEnv(env, 8)
+    #env = DownsampledEnv(env, 4)
 
     env_action_num = env.action_space.n
     state, info = env.reset()

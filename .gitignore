@@ -29,3 +29,5 @@ ml-env
 **/q_values.npy
 src/cartpole.py
 dqn.pth
+
+**/rewards.png
