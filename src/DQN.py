@@ -252,6 +252,7 @@ class Agent:
         initial_state, _ = env.reset()
         stacked_frames = np.roll(self.stacked_frames, shift=-1, axis=0)
         stacked_frames[-1, :] = self.processFrame(initial_state)
+        total_steps = 0
 
         for episode in range(episodes):
             ep_reward = 0
@@ -281,8 +282,10 @@ class Agent:
                 # optimize
                 agent.optimize(batch_size)
         
-                if s % update_frequency == 0:
+                if total_steps % update_frequency == 0:
                     agent.update_target_model()
+
+                total_steps+=1
 
                 if done:
                     break
@@ -312,7 +315,7 @@ observation_n =30*30
 if training:
     env = mario_bros_env.make(
         'SuperMarioBros-v0',
-        render_mode="human"
+        render_mode=None
     )
     env = JoypadSpace(env, RIGHT_ONLY)
 
@@ -343,7 +346,7 @@ else:
         'SuperMarioBros-v0',
         render_mode="human"
     )
-    env = JoypadSpace(env, SIMPLE_MOVEMENT)
+    env = JoypadSpace(env, RIGHT_ONLY)
 
     # Process frames
     env = GrayscaleEnv(env, GrayscaleFilters.RED)
@@ -364,5 +367,6 @@ else:
 
     # Register the custom interrupt handler for Ctrl+C (SIGINT)
     signal.signal(signal.SIGINT, agent.custom_interrupt_handler)
-    agent.train(episodes=1000)
+    agent.train(episodes=10_000)
+    agent.save_model()
     agent.plot_rewards()
