@@ -45,15 +45,18 @@ class Model(nn.Module):
         self.observation_num = observation_num
         self.num_action = num_action
        
+        #self.conv1 = nn.Conv2d(4, 32, kernel_size=3, stride=1, padding=1)
+        #self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
         self.conv1 = nn.Conv2d(4, 32, kernel_size=8, stride=2)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
-       
-        self.conv2_out = 64
-        self.layer1 = nn.Linear((self.conv2_out), 128) #FIXME CONV
 
-        #self.layer1 = nn.Linear(30*30*4, 128) #TODO LINEAR
+        self.flatten = nn.Flatten()
+        #self.layer1 = nn.Linear(64 * 30 * 30, 128)
+        self.layer1 = nn.Linear(1600, 128)
+        
+    
 
-        self.layer2 = nn.Linear(128, 128)
+
         self.layer3 = nn.Linear(128, self.num_action)
 
 
@@ -69,11 +72,11 @@ class Model(nn.Module):
         x = self.conv2(x) #FIXME CONV
         x = nn.functional.relu(x) #FIXME CONV
        
-       
         #x = x.view(-1, 900*4) #TODO LINEAR
-        x = x.view(-1, self.conv2_out)  #FIXME CONV
+        #x = x.view(-1, self.conv2_out)  #FIXME CONV
+        x = self.flatten(x)
         x = F.relu(self.layer1(x))
-        x = F.relu(self.layer2(x))
+ 
         x = self.layer3(x)
         return x
 
@@ -84,10 +87,10 @@ class Agent:
                 observation_space_n,
                 action_space_n,
                 memory_capacity=100_000,
-                discount=0.99,
+                discount=0.95,
                 learning_rate=0.0005,
-                exp_rate=0.9,
-                min_exp_rate=0.05,
+                exp_rate=1.0,
+                min_exp_rate=0.15,
                 exp_decay=0.99, #FIXME prøv 0.99991 når du trener hjemme
                 num_stacked_frames=4,
                  ):
@@ -112,7 +115,6 @@ class Agent:
         # networks
         self.model = Model(self.observation_space_n, self.action_space_n).to(device)
         self.target_model = Model(self.observation_space_n, self.action_space_n).to(device)
-
         # agent memory
         self.replay_memory = ReplayBuffer(self.memory_capacity)
 
@@ -129,7 +131,6 @@ class Agent:
         self.stacked_frames = np.zeros((num_stacked_frames, 30, 30))
 
     def update_target_model(self):
-       
         self.target_model.load_state_dict(self.model.state_dict())
 
     def get_exploration_rate(self):
@@ -156,7 +157,7 @@ class Agent:
 
     def action(self, state):
         """Selects an action using the epsilon-greedy strategy"""
-
+        state = state.reshape(1, 4, 30, 30) #needs extra dim for batch of size 1
         exploration_rate_threshold = np.random.random()  # random float between 0-1
         exploration_rate = self.get_exploration_rate()
         
@@ -165,9 +166,12 @@ class Agent:
             action = random.randrange(0, self.action_space_n)
             action_t = torch.tensor([[action]], device=device, dtype=torch.int64)
         else:
-            action_argmax = self.model(torch.tensor(state, device=device, dtype=torch.float32)).argmax()
+            #print(state.shape)
+            action_argmax = self.model(torch.tensor(state, device=device, dtype=torch.float32)).argmax() 
+            #print(f'state shape {state.shape}')
             #print(action_argmax)
-            action = action_argmax % self.action_space_n
+            action = action_argmax #% self.action_space_n
+            
             action_t = action.reshape(1, 1)
         return action_t
     
@@ -207,24 +211,27 @@ class Agent:
         transitions = self.replay_memory.sample(batch_size)
         batch = Transition(*zip(*transitions))
 
-        state_b = torch.cat(batch.state)
-        next_state_b = torch.cat(batch.next_state)
-        action_b = torch.cat(batch.action)
-        done_t = torch.cat(batch.done).unsqueeze(1)
-      
-        target_q = self.target_model(next_state_b)
-        max_target_q = target_q.argmax()
-
+        state_b = torch.cat(batch.state) #32, 4, 30, 30
+        next_state_b = torch.cat(batch.next_state) #32, 4, 30, 30
+        action_b = torch.cat(batch.action) #32, 1
+        done_t = torch.cat(batch.done).unsqueeze(1) #32, 1
+   
+        target_q = self.target_model(next_state_b) # burde være [32, 5] men er [800, 5]
+        #print(target_q.shape) # er [800, 5]
+   
+        #max_target_q = target_q.max() #vil at denne skal være [32, 1]
+        max_target_q = torch.max(target_q, dim=1, keepdim=True)[0] # shape [32, 1]
+       
         r = torch.cat(batch.reward)  # dim [n]
-        r.unsqueeze_(1) # dim [x,1]
+        r.unsqueeze_(1) # dim [x,1] 
 
         # Q(s, a) = r + γ * max(Q(s', a')) ||
         # Q(s, a) = r                      || if state is done
         Q_sa = r + self.discount * max_target_q * (1 - done_t)  # if done = 1 => Q_result = r
         Q_sa = Q_sa.reshape(-1, 1)
       
-        predicted = torch.gather(input=self.model(state_b), dim=1, index=action_b)
-
+        predicted = torch.gather(input=self.model(state_b), dim=1, index=action_b) # [32,1]
+        #print(predicted)
         loss = F.mse_loss(predicted, Q_sa)
         self.optimizer.zero_grad()
         loss.backward()
@@ -260,6 +267,7 @@ class Agent:
             stacked_frames = self.stack_frames(stacked_frames, state, True)
 
             for s in range(steps):
+                #print(s)
                 action = agent.action(stacked_frames)
                 observation, reward, terminated, truncated, _ = env.step(action.item())
 
@@ -308,7 +316,7 @@ class Agent:
 
 #num_episodes = 2000
 batch_size = 32 # also try: 128
-update_frequency = 1000
+update_frequency = 3500
 training = True
 observation_n =30*30
 
@@ -328,7 +336,7 @@ if training:
     state, info = env.reset()
     n_observations = observation_n
 
-    agent = Agent(env, n_observations, env_action_num, exp_rate=1.0)
+    agent = Agent(env, n_observations, env_action_num, exp_rate=0.7)
     
     state, _ = env.reset()
     state = torch.tensor(state.copy(), dtype=torch.float32, device=device).unsqueeze(0)
