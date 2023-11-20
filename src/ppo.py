@@ -40,7 +40,6 @@ try:
     print("Trying to load stored pre-trained model...")
     model = PPO.load("models/PPO.zip", env)
     print("Loaded! :)")
-    exit()
 except BaseException:
     print("Failed to load existing model, creating new")
     model = PPO("MlpPolicy", env, verbose=True)
