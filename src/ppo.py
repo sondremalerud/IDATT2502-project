@@ -1,7 +1,6 @@
-#! python3
 import mario_bros_env
 from nes_py.wrappers import JoypadSpace
-from mario_bros_env.actions import SIMPLE_MOVEMENT, RIGHT_ONLY
+from mario_bros_env.actions import RIGHT_ONLY
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 from stable_baselines3.common.callbacks import BaseCallback
@@ -11,14 +10,14 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 # Use "python ppo.py train" or "python ppo.py run".
 # Ctrl + C to save and quit.
 
+# Setup enviroment
 env = mario_bros_env.make("SuperMarioBros-v0", render_mode="human")
 env = JoypadSpace(env, RIGHT_ONLY)
 
-# Process frames
+# Image processing
 env = GrayscaleEnv(env, GrayscaleFilters.RED)
 env = DownscaledEnv(env, 12)
 env = DownsampledEnv(env, 4)
@@ -34,8 +33,9 @@ model: PPO
 def saveModel(model):
     print("Saving and quitting...")
     model.save("models/PPO.zip")
-    print("Saved :)")
+    print("Saved.")
 
+# Log rewards in line graph that will be saved to rewards.png
 class RewardLoggerCallback(BaseCallback):
     def __init__(self, verbose: int = 0):
         super().__init__(verbose)
@@ -50,7 +50,6 @@ class RewardLoggerCallback(BaseCallback):
         self.cumulative_reward += self.locals["rewards"][0]
         
         if self.locals["dones"][0]:
-            print("RIP 💀")
             self.rewards.append(self.cumulative_reward)
             self.cumulative_reward = 0
 
@@ -73,9 +72,9 @@ class RewardLoggerCallback(BaseCallback):
 try:
     print("Trying to load stored pre-trained model...")
     model = PPO.load("models/PPO.zip", env)
-    print("Loaded! :)")
+    print("Loaded.")
 except BaseException:
-    print("Failed to load existing model, creating new")
+    print("Failed to load existing model, creating new.")
     model = PPO("MlpPolicy", env, n_steps=256, verbose=True)
 
 
@@ -90,7 +89,7 @@ except IndexError:
 if command == "train":
     rewardlogger = RewardLoggerCallback()
     try:
-        model = model.learn(total_timesteps=10000 * 100, progress_bar=True, callback=rewardlogger)
+        model = model.learn(total_timesteps=10000 * 1000, progress_bar=True, callback=rewardlogger)
         saveModel(model)
     except KeyboardInterrupt:
         saveModel(model)
