@@ -1,12 +1,10 @@
-from mario_bros_env import actions
 import numpy as np
 from nes_py.wrappers import JoypadSpace
 import mario_bros_env
 from mario_bros_env.actions import *
-from wrappers import GrayscaleEnv, DownsampledEnv, DownscaledEnv
+from wrappers import GrayscaleEnv, DownscaledEnv
 from wrappers.filters import GrayscaleFilters
 import signal
-import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,14 +15,9 @@ import matplotlib.pyplot as plt
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-
-# A named tuple representing a single transition in our environment. 
-# It maps (state, action) pairs to their (next_state, reward) result
-#https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward', 'done'))
-#https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
 class ReplayBuffer(object):
+# https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
 
     def __init__(self, capacity):
         self.memory = deque([], maxlen=capacity)
@@ -45,39 +38,23 @@ class Model(nn.Module):
         self.observation_num = observation_num
         self.num_action = num_action
        
-        #self.conv1 = nn.Conv2d(4, 32, kernel_size=3, stride=1, padding=1)
-        #self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
         self.conv1 = nn.Conv2d(4, 32, kernel_size=8, stride=2)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
 
         self.flatten = nn.Flatten()
-        #self.layer1 = nn.Linear(64 * 30 * 30, 128)
         self.layer1 = nn.Linear(1600, 128)
-        
-    
+        self.layer2 = nn.Linear(128, self.num_action)
 
-
-        self.layer3 = nn.Linear(128, self.num_action)
-
-
-
-    def conv_output_size(self, input_size, kernel_size, stride, padding):
-        return ((input_size - kernel_size + 2 * padding) // stride) + 1
 
     def forward(self,x):
-        
-        x = self.conv1(x) #FIXME CONV
-        x = nn.functional.relu(x) #FIXME CONV
+        x = self.conv1(x) 
+        x = nn.functional.relu(x) 
+        x = self.conv2(x)
+        x = nn.functional.relu(x) 
 
-        x = self.conv2(x) #FIXME CONV
-        x = nn.functional.relu(x) #FIXME CONV
-       
-        #x = x.view(-1, 900*4) #TODO LINEAR
-        #x = x.view(-1, self.conv2_out)  #FIXME CONV
         x = self.flatten(x)
         x = F.relu(self.layer1(x))
- 
-        x = self.layer3(x)
+        x = self.layer2(x)
         return x
 
 
@@ -91,7 +68,7 @@ class Agent:
                 learning_rate=0.0005,
                 exp_rate=1.0,
                 min_exp_rate=0.15,
-                exp_decay=0.99, #FIXME prøv 0.99991 når du trener hjemme
+                exp_decay=0.99,
                 num_stacked_frames=4,
                  ):
 
@@ -115,6 +92,7 @@ class Agent:
         # networks
         self.model = Model(self.observation_space_n, self.action_space_n).to(device)
         self.target_model = Model(self.observation_space_n, self.action_space_n).to(device)
+
         # agent memory
         self.replay_memory = ReplayBuffer(self.memory_capacity)
 
@@ -134,30 +112,32 @@ class Agent:
         self.target_model.load_state_dict(self.model.state_dict())
 
     def get_exploration_rate(self):
-        """returns exploration rate"""
+        """ returns exploration rate """
+
         return max(self.exp_rate, self.min_exp_rate)
 
     def update_exploration_rate(self):
-        """Updates exploration rate"""
+        """ Updates exploration rate """
 
         self.exp_rate = self.exp_rate * self.exp_decay
         return self.exp_rate
 
     def save_model(self):
-        """Saves model to the .pth file format"""
+        """ Saves model to the .pth file format """
 
         torch.save(self.model.state_dict(), "dqn.pth")
         print("saved model to 'dqn.pth'")
 
     def load_model(self):
-        """Loads network from .pth file """
+        """ Loads network from .pth file """
 
         self.model.load_state_dict(torch.load("dqn.pth"))
         self.model.eval()
 
     def action(self, state):
-        """Selects an action using the epsilon-greedy strategy"""
-        state = state.reshape(1, 4, 30, 30) #needs extra dim for batch of size 1
+        """ Selects an action using the epsilon-greedy strategy """
+
+        state = state.reshape(1, 4, 30, 30) # needs extra dim for batch of size 1
         exploration_rate_threshold = np.random.random()  # random float between 0-1
         exploration_rate = self.get_exploration_rate()
         
@@ -166,21 +146,15 @@ class Agent:
             action = random.randrange(0, self.action_space_n)
             action_t = torch.tensor([[action]], device=device, dtype=torch.int64)
         else:
-            #print(state.shape)
             action_argmax = self.model(torch.tensor(state, device=device, dtype=torch.float32)).argmax() 
-            #print(f'state shape {state.shape}')
-            #print(action_argmax)
-            action = action_argmax #% self.action_space_n
-            
+            action = action_argmax
             action_t = action.reshape(1, 1)
         return action_t
     
 
     def processFrame(self, state):
-        """Greysscales, downscales, and downsample image. Returns 30x30 image"""
-        #gray_state = grayscale.red_channel(state)
-        #rescaled_state = downscale.divide(gray_state, 8)  # -> [30,32]
-        #downsampled_state = downsample.downsample(rescaled_state, 4)  # reduces to 4 values
+        """ Greysscales, downscales, and downsample image. Returns 30x30 image """
+
         state = np.squeeze(state)
         cropped_state = []
         for i in range(len(state)):
@@ -192,7 +166,7 @@ class Agent:
     
     
     def stack_frames(self, stacked_frames, new_frame, is_new_episode):
-        """Function to stack frames. stacked_frames is a deque."""
+        """ Function to stack frames. stacked_frames is a deque. """
         frame = self.processFrame(new_frame)
 
         if is_new_episode:
@@ -205,37 +179,39 @@ class Agent:
 
 
     def optimize(self, batch_size):
+        """" Samples from replay_memory.
+             Does optimizer step and updates model """
+
         if len(self.replay_memory) < batch_size:
             return
 
         transitions = self.replay_memory.sample(batch_size)
         batch = Transition(*zip(*transitions))
 
-        state_b = torch.cat(batch.state) #32, 4, 30, 30
-        next_state_b = torch.cat(batch.next_state) #32, 4, 30, 30
-        action_b = torch.cat(batch.action) #32, 1
-        done_t = torch.cat(batch.done).unsqueeze(1) #32, 1
+        state_b = torch.cat(batch.state) # shape: [32, 4, 30, 30]
+        next_state_b = torch.cat(batch.next_state) # shape: [32, 4, 30, 30]
+        action_b = torch.cat(batch.action) # shape: [32, 1]
+        done_t = torch.cat(batch.done).unsqueeze(1) # shape: [32, 1]
    
-        target_q = self.target_model(next_state_b) # burde være [32, 5] men er [800, 5]
-        #print(target_q.shape) # er [800, 5]
+        target_q = self.target_model(next_state_b) # shape: [32, 5]
    
-        #max_target_q = target_q.max() #vil at denne skal være [32, 1]
-        max_target_q = torch.max(target_q, dim=1, keepdim=True)[0] # shape [32, 1]
+        max_target_q = torch.max(target_q, dim=1, keepdim=True)[0] # shape: [32, 1]
        
-        r = torch.cat(batch.reward)  # dim [n]
-        r.unsqueeze_(1) # dim [x,1] 
+        r = torch.cat(batch.reward)  # shape: [32]
+        r.unsqueeze_(1) # shape: [32, 1] 
 
         # Q(s, a) = r + γ * max(Q(s', a')) ||
         # Q(s, a) = r                      || if state is done
         Q_sa = r + self.discount * max_target_q * (1 - done_t)  # if done = 1 => Q_result = r
         Q_sa = Q_sa.reshape(-1, 1)
       
-        predicted = torch.gather(input=self.model(state_b), dim=1, index=action_b) # [32,1]
-        #print(predicted)
+        predicted = torch.gather(input=self.model(state_b), dim=1, index=action_b) # shape: [32,1]
         loss = F.mse_loss(predicted, Q_sa)
         self.optimizer.zero_grad()
         loss.backward()
 
+        # Uncomment for clipping:
+        #
         #CLIP_NORM = 0.6
         #torch.nn.utils.clip_grad_norm_(self.model.parameters(),CLIP_NORM)
 
@@ -243,7 +219,7 @@ class Agent:
 
 
     def plot_rewards(self):
-        """ Plots mean rewards """
+        """ Plots mean rewards in a line diagram """
         mean_rewards = []
 
         for t in range(len(self.rewards)):
@@ -254,7 +230,7 @@ class Agent:
         plt.savefig('rewards.png')
 
     def train(self, episodes=100, steps=10_000):
-        """trains model for n episodes (does not save the model)"""
+        """ Trains model for n episodes (does not save the model) """
         self.rewards = []
         initial_state, _ = env.reset()
         stacked_frames = np.roll(self.stacked_frames, shift=-1, axis=0)
@@ -263,11 +239,10 @@ class Agent:
 
         for episode in range(episodes):
             ep_reward = 0
-            state, info = env.reset()
+            state, _ = env.reset()
             stacked_frames = self.stack_frames(stacked_frames, state, True)
 
             for s in range(steps):
-                #print(s)
                 action = agent.action(stacked_frames)
                 observation, reward, terminated, truncated, _ = env.step(action.item())
 
@@ -306,7 +281,8 @@ class Agent:
 
 
     def custom_interrupt_handler(self,signum, frame):
-        """This function will be called when Ctrl+C is pressed"""
+        """ This function will be called when Ctrl+C is pressed """
+
         print("\nCustom interrupt handler activated.")
         self.save_model()
         print("Q_values saved")
@@ -314,10 +290,13 @@ class Agent:
 
         exit()
 
-#num_episodes = 2000
-batch_size = 32 # also try: 128
-update_frequency = 3500
+batch_size = 32 
+update_frequency = 1000
+
+# Training: creates a new model. No render
+# Not training: loads model (from dqn.pth). With render
 training = True
+
 observation_n =30*30
 
 if training:
@@ -330,7 +309,6 @@ if training:
     # Process frames
     env = GrayscaleEnv(env, GrayscaleFilters.RED)
     env = DownscaledEnv(env, 8)
-    #env = DownsampledEnv(env, 4)
 
     env_action_num = env.action_space.n
     state, info = env.reset()
@@ -359,7 +337,7 @@ else:
     # Process frames
     env = GrayscaleEnv(env, GrayscaleFilters.RED)
     env = DownscaledEnv(env, 8)
-    #env = DownsampledEnv(env, 4)
+
 
     env_action_num = env.action_space.n
     state, info = env.reset()
@@ -368,6 +346,8 @@ else:
     agent = Agent(env, n_observations, env_action_num, 
     exp_rate=0.1,
     )
+
+    # Loads trained model
     agent.load_model()
 
     state, _ = env.reset()
