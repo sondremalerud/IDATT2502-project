@@ -7,7 +7,6 @@ from wrappers.filters import GrayscaleFilters
 import signal
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 from collections import namedtuple, deque
 import random
@@ -53,7 +52,7 @@ class Model(nn.Module):
         x = nn.functional.relu(x) 
 
         x = self.flatten(x)
-        x = F.relu(self.layer1(x))
+        x = nn.functional.relu(self.layer1(x))
         x = self.layer2(x)
         return x
 
@@ -64,7 +63,7 @@ class Agent:
                 observation_space_n,
                 action_space_n,
                 memory_capacity=100_000,
-                discount=0.95,
+                discount=0.99,
                 learning_rate=0.0005,
                 exp_rate=1.0,
                 min_exp_rate=0.15,
