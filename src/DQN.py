@@ -205,7 +205,7 @@ class Agent:
         Q_sa = Q_sa.reshape(-1, 1)
       
         predicted = torch.gather(input=self.model(state_b), dim=1, index=action_b) # shape: [32,1]
-        loss = F.mse_loss(predicted, Q_sa)
+        loss = nn.functional.mse_loss(predicted, Q_sa)
         self.optimizer.zero_grad()
         loss.backward()
 
