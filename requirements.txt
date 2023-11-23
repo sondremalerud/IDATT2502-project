@@ -1,0 +1,5 @@
+./nes-py
+./mario-bros-env
+torch
+matplotlib
+stable_baselines3[extra]
