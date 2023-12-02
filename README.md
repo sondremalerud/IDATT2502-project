@@ -1,3 +1,6 @@
+## Demo
+![Super Mario Bros. DDQN Demo](demo.gif)
+
 ## Requirements
 
 ### Python
